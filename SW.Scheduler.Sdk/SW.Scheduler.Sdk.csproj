@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.1</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <Authors>SimplyWorks</Authors>
         <Company>SimplyWorks</Company>
         <Product>SimplyWorks.Scheduler</Product>
@@ -9,8 +9,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="SimplyWorks.HttpExtensions" Version="2.0.44" />
-      <PackageReference Include="SimplyWorks.PrimitiveTypes" Version="2.0.106" />
+      <PackageReference Include="SimplyWorks.HttpExtensions" Version="8.1.0" />
+      <PackageReference Include="SimplyWorks.PrimitiveTypes" Version="8.1.2" />
     </ItemGroup>
 
 </Project>
