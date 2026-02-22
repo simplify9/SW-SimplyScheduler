@@ -4,13 +4,12 @@ using SW.PrimitiveTypes;
 
 namespace SampleApplication.Jobs;
 
+[Schedule("30 * * * * ?", TriggerKey = "send-emails-every-minute", Description = "Send customer emails every minute at second 30")]
 public class SendCustomerEmailsJob : IScheduledJob
 {
     private readonly AppDbContext _db;
     public SendCustomerEmailsJob(AppDbContext db) => _db = db;
 
-    // Run every minute at second 30
-    public string DefaultSchedule() => "30 * * * * ?";
 
     public async Task Execute()
     {

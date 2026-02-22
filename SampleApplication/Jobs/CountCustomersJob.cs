@@ -4,13 +4,12 @@ using SW.PrimitiveTypes; // contains IScheduledJob
 
 namespace SampleApplication.Jobs;
 
+[Schedule("0 * * * * ?", TriggerKey = "count-customers-every-minute", Description = "Count customers every minute")]
 public class CountCustomersJob : IScheduledJob
 {
     private readonly AppDbContext _db;
     public CountCustomersJob(AppDbContext db) => _db = db;
 
-    // Run every minute at second 0
-    public string DefaultSchedule() => "0 * * * * ?";
 
     public async Task Execute()
     {

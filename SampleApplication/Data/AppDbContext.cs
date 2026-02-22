@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SW.Scheduler.PgSql;
 
 namespace SampleApplication.Data;
 
@@ -10,6 +11,7 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Your application entities
         modelBuilder.Entity<Customer>(b =>
         {
             b.HasKey(c => c.Id);
@@ -17,6 +19,10 @@ public class AppDbContext : DbContext
             b.Property(c => c.Email).IsRequired().HasMaxLength(320);
             b.HasIndex(c => c.Email).IsUnique();
         });
+
+        // Add Quartz.NET scheduler tables to this DbContext
+        // This will include Quartz tables in YOUR migrations
+        modelBuilder.UseQuartzPostgreSql(schema: "quartz");
     }
 }
 

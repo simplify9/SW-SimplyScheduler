@@ -17,4 +17,8 @@
         <PackageReference Include="SimplyWorks.PrimitiveTypes" Version="8.1.2" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" />
+    </ItemGroup>
+
 </Project>

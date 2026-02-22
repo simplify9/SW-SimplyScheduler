@@ -10,7 +10,8 @@ internal class ScheduledJobDefinition:IScheduledJobDefinition
     public MethodInfo ExecutMethod { get; set; }
     public Type JobType { get; set; }
     public bool WithParams => JobParamsType != null;
-    
+    public string Name => JobType.Name;
+    public string Namespace => JobType.Namespace ?? throw new InvalidOperationException("Namespace not found");
 }
 
 public class BackgroundJobOptions
