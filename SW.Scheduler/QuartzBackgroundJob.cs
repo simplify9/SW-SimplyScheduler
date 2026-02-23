@@ -4,77 +4,97 @@ using Quartz;
 
 namespace SW.Scheduler;
 
-[DisallowConcurrentExecution]
-[PersistJobDataAfterExecution]
-internal class QuartzBackgroundJob : IJob
+// Shared execution logic extracted so both Quartz job types can reuse it without duplication.
+internal static class QuartzJobExecutor
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly JobsDiscovery _jobsDiscovery;
-    private readonly ILogger<QuartzBackgroundJob> _logger;
-    public QuartzBackgroundJob(IServiceProvider serviceProvider, JobsDiscovery jobsDiscovery, ILogger<QuartzBackgroundJob> logger)
+    public static async Task Execute(
+        IJobExecutionContext context,
+        IServiceProvider serviceProvider,
+        JobsDiscovery jobsDiscovery,
+        ILogger logger)
     {
-        _serviceProvider = serviceProvider;
-        _jobsDiscovery = jobsDiscovery;
-        _logger = logger;
-    }
+        var jobKey = context.JobDetail.Key;
 
-    public Task Execute(IJobExecutionContext context) => TryExecuteInternal(context);
+        // Dedicated parameterized jobs store both the original type name and group in JobDataMap.
+        // Simple jobs use the type name directly resolvable from the group (which IS "LastNs.ClassName").
+        // For simple jobs, the type name is the last segment of the group (after the last dot).
+        string jobTypeName, jobGroup;
 
-    private async Task TryExecuteInternal(IJobExecutionContext context)
-    {
-        try
+        var hasTypeName = context.JobDetail.JobDataMap.TryGetString(Constants.JobTypeNameKey, out var storedName)
+                          && !string.IsNullOrWhiteSpace(storedName);
+        var hasGroup    = context.JobDetail.JobDataMap.TryGetString(Constants.JobGroupKey,    out var storedGroup)
+                          && !string.IsNullOrWhiteSpace(storedGroup);
+
+        if (hasTypeName && hasGroup)
         {
-            await ExecuteInternal(context);
+            // Parameterized dedicated job
+            jobTypeName = storedName!;
+            jobGroup    = storedGroup!;
         }
-        catch (Exception e)
+        else
         {
-            throw new JobExecutionException(e, false);
+            // Simple job — JobKey.Group IS the group, type name is the last part of the group
+            jobGroup = jobKey.Group;
+            var dot = jobGroup.LastIndexOf('.');
+            jobTypeName = dot >= 0 ? jobGroup[(dot + 1)..] : jobGroup;
         }
-    }
 
-    private async Task ExecuteInternal(IJobExecutionContext context)
-    {
-        var jobName = context.JobDetail.Key.Name;
-        var jobNameSpace = context.JobDetail.Key.Group;
-        
-        var jobDefinition = _jobsDiscovery.GetJobDefinition(jobName, jobNameSpace);
+        var jobDefinition = jobsDiscovery.GetJobDefinition(jobTypeName, jobGroup);
         if (jobDefinition == null)
         {
-            _logger.LogError($"Job {jobName} with namespace {jobNameSpace} not found in jobs discovery");
+            logger.LogError("Job type '{TypeName}' in group '{Group}' not found in jobs discovery", jobTypeName, jobGroup);
             await context.Scheduler.UnscheduleJob(context.Trigger.Key);
             return;
         }
-        
-        
-        var svc = _serviceProvider.GetService(jobDefinition.JobType);
-        
+
+        var svc = serviceProvider.GetService(jobDefinition.JobType);
         if (svc == null)
         {
-            _logger.LogError($"Service {jobDefinition.JobType.FullName} not found in service provider");
+            logger.LogError("Service {ServiceType} not found in service provider", jobDefinition.JobType.FullName);
             return;
         }
+
         var execMethod = jobDefinition.ExecutMethod;
-        
+
         if (jobDefinition.WithParams)
         {
             var exists = context.MergedJobDataMap.TryGetString(Constants.JobParamsKey, out var value);
-            
             if (!exists || string.IsNullOrWhiteSpace(value))
             {
-                _logger.LogError($"Job {jobName} with namespace {jobNameSpace} requires parameters but not found in job data map");
+                logger.LogError("Job '{TypeName}' requires parameters but none found in job data map", jobTypeName);
                 return;
             }
-            
+
             var jobParams = JsonSerializer.Deserialize(value, jobDefinition.JobParamsType);
-            
             await (Task)execMethod.Invoke(svc, new[] { jobParams });
         }
         else
         {
             await (Task)execMethod.Invoke(svc, null);
         }
-        
-        
+    }
+}
 
+/// <summary>
+/// Single Quartz IJob wrapper for all scheduled jobs.
+/// Concurrency is controlled at the job-data level via JobBuilder.DisallowConcurrentExecution()
+/// rather than a class-level attribute, so a single class handles both modes.
+/// </summary>
+[PersistJobDataAfterExecution]
+internal class QuartzBackgroundJob(
+    IServiceProvider serviceProvider,
+    JobsDiscovery jobsDiscovery,
+    ILogger<QuartzBackgroundJob> logger) : IJob
+{
+    public async Task Execute(IJobExecutionContext context)
+    {
+        try
+        {
+            await QuartzJobExecutor.Execute(context, serviceProvider, jobsDiscovery, logger);
+        }
+        catch (Exception e)
+        {
+            throw new JobExecutionException(e, false);
+        }
     }
 }

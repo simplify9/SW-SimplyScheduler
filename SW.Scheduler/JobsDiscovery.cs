@@ -61,9 +61,9 @@ internal class JobsDiscovery(IServiceProvider sp)
         get { return _jobDefinitions ??= Load(); }
     }
 
-    public ScheduledJobDefinition GetJobDefinition(string jobName, string jobNameSpace) =>
+    public ScheduledJobDefinition GetJobDefinition(string jobName, string group) =>
         All.SingleOrDefault(x =>
-            x.JobType.Name == jobName && x.JobType.Namespace == jobNameSpace);
+            x.Name == jobName && x.Group == group);
     
     public ScheduledJobDefinition GetJobDefinition(Type jobType) =>
         All.SingleOrDefault(x => x.JobType == jobType);

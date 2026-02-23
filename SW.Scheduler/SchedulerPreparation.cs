@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,12 +8,6 @@ namespace SW.Scheduler;
 
 public class SchedulerPreparation(IServiceProvider serviceProvider, ILogger<SchedulerPreparation> logger) : BackgroundService
 {
-    static JsonSerializerOptions _serializerOptions = new()
-    {
-        ReferenceHandler = ReferenceHandler.IgnoreCycles
-    };
-
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var scope = serviceProvider.CreateScope();
@@ -23,45 +15,55 @@ public class SchedulerPreparation(IServiceProvider serviceProvider, ILogger<Sche
         var schedulerFactory = scope.ServiceProvider.GetRequiredService<ISchedulerFactory>();
         var scheduler = await schedulerFactory.GetScheduler(stoppingToken);
 
-
         foreach (var jobDefinition in jobsDiscovery.All)
         {
-            // Register all jobs as durable jobs in Quartz
+            // Parameterized jobs are not registered as durable shared jobs —
+            // each schedule creates its own dedicated Quartz job at runtime.
+            if (jobDefinition.WithParams) continue;
+
+            // Read [ScheduleConfig] attribute if present, otherwise use defaults.
+            var config = ScheduleConfigExtensions.FromAttribute(jobDefinition.JobType);
+
+            // JobKey: Name = "MAIN", Group = "LastNs.ClassName"  e.g. "Jobs.SendCustomerEmailsJob"
             var job = JobBuilder.Create<QuartzBackgroundJob>()
-                .WithIdentity(jobDefinition.Name, jobDefinition.Namespace)
+                .WithIdentity(JobKeyConventions.MainJobName, jobDefinition.Group)
                 .StoreDurably()
-                .RequestRecovery()
+                .ApplyConfig(config)
                 .Build();
 
             var existingJob = await scheduler.GetJobDetail(job.Key, stoppingToken);
             if (existingJob == null)
             {
                 await scheduler.AddJob(job, true, stoppingToken);
-                logger.LogInformation($"Registered durable job: {jobDefinition.Name} in namespace {jobDefinition.Namespace}");
+                logger.LogInformation(
+                    "Registered durable job: {Group} (concurrent={Concurrent})",
+                    jobDefinition.Group, config.AllowConcurrentExecution);
             }
-            
-            // Auto-schedule jobs with [Schedule] attribute (only for IScheduledJob, not IScheduledJob<T>)
-            if (jobDefinition.WithParams) continue;
+
+            // Auto-schedule jobs with [Schedule] attribute.
             if (jobDefinition.JobType.GetCustomAttributes(typeof(ScheduleAttribute), false)
                     .FirstOrDefault() is not ScheduleAttribute scheduleAttr) continue;
-            var triggerKey = scheduleAttr.TriggerKey ?? $"{jobDefinition.Name}_DefaultTrigger";
+
+            var triggerKey = Constants.DefaultTriggerKey(jobDefinition.Group);
             var trigger = TriggerBuilder.Create()
-                .WithIdentity(triggerKey, jobDefinition.Namespace)
+                .WithIdentity(triggerKey, jobDefinition.Group)
                 .ForJob(job.Key)
-                .WithCronSchedule(scheduleAttr.CronExpression)
+                .WithCronSchedule(scheduleAttr.CronExpression,
+                    b => b.ApplyMisfire(config.MisfireInstructions))
                 .WithDescription(scheduleAttr.Description)
                 .Build();
-                    
-            // Only create if trigger doesn't exist
+
             var existingTrigger = await scheduler.GetTrigger(trigger.Key, stoppingToken);
             if (existingTrigger == null)
             {
                 await scheduler.ScheduleJob(trigger, stoppingToken);
-                logger.LogInformation($"Auto-scheduled job {jobDefinition.Name} with cron: {scheduleAttr.CronExpression}");
+                logger.LogInformation("Auto-scheduled {Group} with cron: {Cron}",
+                    jobDefinition.Group, scheduleAttr.CronExpression);
             }
             else
             {
-                logger.LogInformation($"Trigger {triggerKey} already exists for job {jobDefinition.Name}, skipping auto-schedule");
+                logger.LogInformation("Trigger for {Group} already exists, skipping auto-schedule",
+                    jobDefinition.Group);
             }
         }
     }

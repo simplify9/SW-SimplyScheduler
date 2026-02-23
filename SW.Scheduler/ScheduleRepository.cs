@@ -7,6 +7,72 @@ namespace SW.Scheduler;
 internal static class Constants
 {
     public const string JobParamsKey = "JobParams";
+
+    /// <summary>
+    /// Stores the original job type name in a dedicated parameterized job's data map
+    /// so the executor can find the correct ScheduledJobDefinition.
+    /// </summary>
+    public const string JobTypeNameKey = "JobTypeName";
+
+    /// <summary>
+    /// Stores the job group in a dedicated parameterized job's data map
+    /// so the executor can find the correct ScheduledJobDefinition by group.
+    /// </summary>
+    public const string JobGroupKey = "JobGroup";
+
+    /// <summary>
+    /// Produces the single deterministic trigger key used for a simple (no-param) job.
+    /// </summary>
+    public static string DefaultTriggerKey(string group) => $"{group}_Default";
+
+    /// <summary>
+    /// Produces the trigger key name for a dedicated parameterized-job schedule.
+    /// </summary>
+    public static string ParameterizedTriggerKey(string scheduleKey) => $"{scheduleKey}_Trigger";
+}
+
+internal static class ScheduleConfigExtensions
+{
+    /// <summary>
+    /// Builds a <see cref="ScheduleConfig"/> from a <see cref="ScheduleConfigAttribute"/>, or returns defaults.
+    /// </summary>
+    public static ScheduleConfig FromAttribute(Type jobType)
+    {
+        var attr = jobType.GetCustomAttributes(typeof(ScheduleConfigAttribute), false)
+            .FirstOrDefault() as ScheduleConfigAttribute;
+
+        return attr == null
+            ? new ScheduleConfig()
+            : new ScheduleConfig
+            {
+                AllowConcurrentExecution = attr.AllowConcurrentExecution,
+                RequestsRecovery = attr.RequestsRecovery,
+                MisfireInstructions = attr.MisfireInstructions
+            };
+    }
+
+    /// <summary>
+    /// Applies <see cref="ScheduleConfig"/> to a <see cref="JobBuilder"/>:
+    /// sets recovery and, when concurrency is disallowed, marks the job accordingly.
+    /// </summary>
+    public static JobBuilder ApplyConfig(this JobBuilder builder, ScheduleConfig config)
+    {
+        builder = builder.RequestRecovery(config.RequestsRecovery);
+        if (!config.AllowConcurrentExecution)
+            builder = builder.DisallowConcurrentExecution();
+        return builder;
+    }
+
+    /// <summary>
+    /// Applies misfire instructions to a <see cref="CronScheduleBuilder"/>.
+    /// </summary>
+    public static CronScheduleBuilder ApplyMisfire(this CronScheduleBuilder builder, MisfireInstructions misfire)
+        => misfire switch
+        {
+            MisfireInstructions.Skip    => builder.WithMisfireHandlingInstructionDoNothing(),
+            MisfireInstructions.FireAll => builder.WithMisfireHandlingInstructionIgnoreMisfires(),
+            _                          => builder.WithMisfireHandlingInstructionFireAndProceed() // FireOnce
+        };
 }
 
 internal class ScheduleRepository(ISchedulerFactory schedulerFactory, JobsDiscovery jobsDiscovery)
@@ -17,180 +83,285 @@ internal class ScheduleRepository(ISchedulerFactory schedulerFactory, JobsDiscov
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public async Task<string> Schedule<TScheduler, TParam>(TParam param, string cronExpression, string triggerKey) 
+    // -------------------------------------------------------------------------
+    // Parameterized job – Schedule (dedicated job per scheduleKey)
+    // JobKey: Name = scheduleKey, Group = jobDef.Group
+    // -------------------------------------------------------------------------
+
+    public async Task Schedule<TScheduler, TParam>(TParam param, string cronExpression, string scheduleKey, ScheduleConfig? config = null)
         where TScheduler : IScheduledJob<TParam>
     {
         var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
         if (jobDef == null)
             throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
-        
+
         if (param == null)
             throw new SWValidationException("JobParamsRequired", "Job params cannot be null");
-        
+
         cronExpression.ValidateCronExpression();
-        
+
+        config ??= ScheduleConfigExtensions.FromAttribute(typeof(TScheduler));
+
         var scheduler = await schedulerFactory.GetScheduler();
-        var jobKey = new JobKey(jobDef.Name, jobDef.Namespace);
-        var triggerKeyObj = new TriggerKey(triggerKey, jobDef.Namespace);
-        
-        // Check if trigger already exists
-        var existingTrigger = await scheduler.GetTrigger(triggerKeyObj);
-        if (existingTrigger != null)
-            throw new SWValidationException("TriggerAlreadyExists", $"Trigger {triggerKey} already exists");
-        
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity(triggerKeyObj)
-            .ForJob(jobKey)
-            .WithCronSchedule(cronExpression)
-            .UsingJobData(Constants.JobParamsKey, JsonSerializer.Serialize(param, SerializerOptions))
+        // Name = scheduleKey (unique per schedule), Group = job's group
+        var jobKey     = new JobKey(scheduleKey, jobDef.Group);
+        var triggerKey = new TriggerKey(Constants.ParameterizedTriggerKey(scheduleKey), jobDef.Group);
+
+        if (await scheduler.CheckExists(jobKey))
+            throw new SWValidationException("ScheduleAlreadyExists", $"A schedule with key '{scheduleKey}' already exists");
+
+        var job = JobBuilder.Create<QuartzBackgroundJob>()
+            .WithIdentity(jobKey)
+            .ApplyConfig(config)
+            .UsingJobData(Constants.JobTypeNameKey, jobDef.Name)
+            .UsingJobData(Constants.JobGroupKey,    jobDef.Group)
+            .UsingJobData(Constants.JobParamsKey,   JsonSerializer.Serialize(param, SerializerOptions))
+            .StoreDurably(false)
             .Build();
-        
-        await scheduler.ScheduleJob(trigger);
-        return triggerKey;
+
+        var trigger = TriggerBuilder.Create()
+            .WithIdentity(triggerKey)
+            .ForJob(jobKey)
+            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions))
+            .Build();
+
+        await scheduler.ScheduleJob(job, trigger);
     }
 
-    public async Task<string> Schedule<TScheduler>(string cronExpression, string triggerKey) 
+    // -------------------------------------------------------------------------
+    // Simple job – Schedule (single default trigger, no key exposed)
+    // JobKey: Name = "MAIN", Group = jobDef.Group
+    // -------------------------------------------------------------------------
+
+    public async Task Schedule<TScheduler>(string cronExpression, ScheduleConfig? config = null)
         where TScheduler : IScheduledJob
     {
         var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
         if (jobDef == null)
             throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
-        
+
         cronExpression.ValidateCronExpression();
-        
-        var scheduler = await schedulerFactory.GetScheduler();
-        var jobKey = new JobKey(jobDef.Name, jobDef.Namespace);
-        var triggerKeyObj = new TriggerKey(triggerKey, jobDef.Namespace);
-        
-        // Check if trigger already exists
-        var existingTrigger = await scheduler.GetTrigger(triggerKeyObj);
-        if (existingTrigger != null)
-            throw new SWValidationException("TriggerAlreadyExists", $"Trigger {triggerKey} already exists");
-        
-        var trigger = TriggerBuilder.Create()
+
+        config ??= ScheduleConfigExtensions.FromAttribute(typeof(TScheduler));
+
+        var scheduler    = await schedulerFactory.GetScheduler();
+        var jobKey       = new JobKey(JobKeyConventions.MainJobName, jobDef.Group);
+        var triggerKeyObj = new TriggerKey(Constants.DefaultTriggerKey(jobDef.Group), jobDef.Group);
+
+        var newTrigger = TriggerBuilder.Create()
             .WithIdentity(triggerKeyObj)
             .ForJob(jobKey)
-            .WithCronSchedule(cronExpression)
+            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions))
             .Build();
-        
-        await scheduler.ScheduleJob(trigger);
-        return triggerKey;
+
+        var existingTrigger = await scheduler.GetTrigger(triggerKeyObj);
+        if (existingTrigger != null)
+            await scheduler.RescheduleJob(triggerKeyObj, newTrigger);
+        else
+            await scheduler.ScheduleJob(newTrigger);
     }
 
-    public async Task<string> ScheduleOnce<TScheduler, TParam>(TParam param, DateTime? runAt = null) 
+    // -------------------------------------------------------------------------
+    // Parameterized job – ScheduleOnce (dedicated job, auto-generated key)
+    // JobKey: Name = auto-generated scheduleKey, Group = jobDef.Group
+    // -------------------------------------------------------------------------
+
+    public async Task<string> ScheduleOnce<TScheduler, TParam>(TParam param, DateTime? runAt = null, ScheduleConfig? config = null)
         where TScheduler : IScheduledJob<TParam>
     {
         var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
         if (jobDef == null)
             throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
-        
+
         if (param == null)
             throw new SWValidationException("JobParamsRequired", "Job params cannot be null");
-        
-        var scheduler = await schedulerFactory.GetScheduler();
-        var jobKey = new JobKey(jobDef.Name, jobDef.Namespace);
-        var triggerKey = $"{jobDef.Name}_OneTime_{Guid.NewGuid():N}";
-        var triggerKeyObj = new TriggerKey(triggerKey, jobDef.Namespace);
-        
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity(triggerKeyObj)
-            .ForJob(jobKey)
-            .StartAt(runAt.HasValue ? new DateTimeOffset(runAt.Value) : DateTimeOffset.UtcNow)
-            .UsingJobData(Constants.JobParamsKey, JsonSerializer.Serialize(param, SerializerOptions))
-            .Build();
-        
-        await scheduler.ScheduleJob(trigger);
-        return triggerKey;
-    }
 
-    public async Task<string> ScheduleOnce<TScheduler>(DateTime? runAt = null) 
-        where TScheduler : IScheduledJob
-    {
-        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
-        if (jobDef == null)
-            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
-        
-        var scheduler = await schedulerFactory.GetScheduler();
-        var jobKey = new JobKey(jobDef.Name, jobDef.Namespace);
-        var triggerKey = $"{jobDef.Name}_OneTime_{Guid.NewGuid():N}";
-        var triggerKeyObj = new TriggerKey(triggerKey, jobDef.Namespace);
-        
+        config ??= ScheduleConfigExtensions.FromAttribute(typeof(TScheduler));
+
+        var scheduler  = await schedulerFactory.GetScheduler();
+        var scheduleKey = $"{jobDef.Name}_OneTime_{Guid.NewGuid():N}";
+        var jobKey      = new JobKey(scheduleKey, jobDef.Group);
+        var triggerKey  = new TriggerKey(Constants.ParameterizedTriggerKey(scheduleKey), jobDef.Group);
+
+        var job = JobBuilder.Create<QuartzBackgroundJob>()
+            .WithIdentity(jobKey)
+            .ApplyConfig(config)
+            .UsingJobData(Constants.JobTypeNameKey, jobDef.Name)
+            .UsingJobData(Constants.JobGroupKey,    jobDef.Group)
+            .UsingJobData(Constants.JobParamsKey,   JsonSerializer.Serialize(param, SerializerOptions))
+            .StoreDurably(false)
+            .Build();
+
         var trigger = TriggerBuilder.Create()
-            .WithIdentity(triggerKeyObj)
+            .WithIdentity(triggerKey)
             .ForJob(jobKey)
             .StartAt(runAt.HasValue ? new DateTimeOffset(runAt.Value) : DateTimeOffset.UtcNow)
             .Build();
-        
-        await scheduler.ScheduleJob(trigger);
-        return triggerKey;
+
+        await scheduler.ScheduleJob(job, trigger);
+        return scheduleKey;
     }
 
-    public async Task RescheduleJob(string triggerKey, string newCronExpression)
+    // -------------------------------------------------------------------------
+    // RescheduleJob
+    // -------------------------------------------------------------------------
+
+    public async Task RescheduleJob<TScheduler, TParam>(string scheduleKey, string newCronExpression)
+        where TScheduler : IScheduledJob<TParam>
     {
         newCronExpression.ValidateCronExpression();
-        
-        var scheduler = await schedulerFactory.GetScheduler();
-        
-        // Find trigger across all groups
-        var triggerKeys = await scheduler.GetTriggerKeys(Quartz.Impl.Matchers.GroupMatcher<TriggerKey>.AnyGroup());
-        var existingTriggerKey = triggerKeys.FirstOrDefault(tk => tk.Name == triggerKey);
-        
-        if (existingTriggerKey == null)
-            throw new SWValidationException("TriggerNotFound", $"Trigger {triggerKey} not found");
-        
-        var existingTrigger = await scheduler.GetTrigger(existingTriggerKey);
-        
+
+        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
+        if (jobDef == null)
+            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
+
+        var scheduler    = await schedulerFactory.GetScheduler();
+        var triggerKeyObj = new TriggerKey(Constants.ParameterizedTriggerKey(scheduleKey), jobDef.Group);
+        var existingTrigger = await scheduler.GetTrigger(triggerKeyObj)
+            ?? throw new SWValidationException("ScheduleNotFound", $"Schedule '{scheduleKey}' not found");
+
         var newTrigger = TriggerBuilder.Create()
-            .WithIdentity(existingTriggerKey)
+            .WithIdentity(triggerKeyObj)
             .ForJob(existingTrigger.JobKey)
             .WithCronSchedule(newCronExpression)
             .UsingJobData(existingTrigger.JobDataMap)
             .Build();
-        
-        await scheduler.RescheduleJob(existingTriggerKey, newTrigger);
+
+        await scheduler.RescheduleJob(triggerKeyObj, newTrigger);
     }
 
-    public async Task UnscheduleJob(string triggerKey)
+    public async Task RescheduleJob<TScheduler>(string newCronExpression)
+        where TScheduler : IScheduledJob
     {
-        var scheduler = await schedulerFactory.GetScheduler();
-        
-        // Find trigger across all groups
-        var triggerKeys = await scheduler.GetTriggerKeys(Quartz.Impl.Matchers.GroupMatcher<TriggerKey>.AnyGroup());
-        var existingTriggerKey = triggerKeys.FirstOrDefault(tk => tk.Name == triggerKey);
-        
-        if (existingTriggerKey == null)
-            throw new SWValidationException("TriggerNotFound", $"Trigger {triggerKey} not found");
-        
-        await scheduler.UnscheduleJob(existingTriggerKey);
+        newCronExpression.ValidateCronExpression();
+
+        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
+        if (jobDef == null)
+            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
+
+        var scheduler     = await schedulerFactory.GetScheduler();
+        var triggerKeyObj = new TriggerKey(Constants.DefaultTriggerKey(jobDef.Group), jobDef.Group);
+        var existingTrigger = await scheduler.GetTrigger(triggerKeyObj)
+            ?? throw new SWValidationException("ScheduleNotFound",
+                $"No default trigger found for job '{typeof(TScheduler).Name}'. Schedule the job first.");
+
+        var newTrigger = TriggerBuilder.Create()
+            .WithIdentity(triggerKeyObj)
+            .ForJob(existingTrigger.JobKey)
+            .WithCronSchedule(newCronExpression)
+            .Build();
+
+        await scheduler.RescheduleJob(triggerKeyObj, newTrigger);
     }
 
-    public async Task PauseJob(string triggerKey)
+    // -------------------------------------------------------------------------
+    // UnscheduleJob
+    // -------------------------------------------------------------------------
+
+    public async Task UnscheduleJob<TScheduler, TParam>(string scheduleKey)
+        where TScheduler : IScheduledJob<TParam>
     {
+        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
+        if (jobDef == null)
+            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
+
         var scheduler = await schedulerFactory.GetScheduler();
-        
-        // Find trigger across all groups
-        var triggerKeys = await scheduler.GetTriggerKeys(Quartz.Impl.Matchers.GroupMatcher<TriggerKey>.AnyGroup());
-        var existingTriggerKey = triggerKeys.FirstOrDefault(tk => tk.Name == triggerKey);
-        
-        if (existingTriggerKey == null)
-            throw new SWValidationException("TriggerNotFound", $"Trigger {triggerKey} not found");
-        
-        await scheduler.PauseTrigger(existingTriggerKey);
+        var jobKey    = new JobKey(scheduleKey, jobDef.Group);
+
+        if (!await scheduler.DeleteJob(jobKey))
+            throw new SWValidationException("ScheduleNotFound", $"Schedule '{scheduleKey}' not found");
     }
 
-    public async Task ResumeJob(string triggerKey)
+    public async Task UnscheduleJob<TScheduler>()
+        where TScheduler : IScheduledJob
     {
-        var scheduler = await schedulerFactory.GetScheduler();
-        
-        // Find trigger across all groups
-        var triggerKeys = await scheduler.GetTriggerKeys(Quartz.Impl.Matchers.GroupMatcher<TriggerKey>.AnyGroup());
-        var existingTriggerKey = triggerKeys.FirstOrDefault(tk => tk.Name == triggerKey);
-        
-        if (existingTriggerKey == null)
-            throw new SWValidationException("TriggerNotFound", $"Trigger {triggerKey} not found");
-        
-        await scheduler.ResumeTrigger(existingTriggerKey);
+        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
+        if (jobDef == null)
+            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
+
+        var scheduler     = await schedulerFactory.GetScheduler();
+        var triggerKeyObj = new TriggerKey(Constants.DefaultTriggerKey(jobDef.Group), jobDef.Group);
+
+        if (!await scheduler.UnscheduleJob(triggerKeyObj))
+            throw new SWValidationException("ScheduleNotFound",
+                $"No default trigger found for job '{typeof(TScheduler).Name}'");
     }
+
+    // -------------------------------------------------------------------------
+    // PauseJob
+    // -------------------------------------------------------------------------
+
+    public async Task PauseJob<TScheduler, TParam>(string scheduleKey)
+        where TScheduler : IScheduledJob<TParam>
+    {
+        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
+        if (jobDef == null)
+            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
+
+        var scheduler = await schedulerFactory.GetScheduler();
+        var jobKey    = new JobKey(scheduleKey, jobDef.Group);
+
+        if (!await scheduler.CheckExists(jobKey))
+            throw new SWValidationException("ScheduleNotFound", $"Schedule '{scheduleKey}' not found");
+
+        await scheduler.PauseJob(jobKey);
+    }
+
+    public async Task PauseJob<TScheduler>()
+        where TScheduler : IScheduledJob
+    {
+        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
+        if (jobDef == null)
+            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
+
+        var scheduler     = await schedulerFactory.GetScheduler();
+        var triggerKeyObj = new TriggerKey(Constants.DefaultTriggerKey(jobDef.Group), jobDef.Group);
+
+        if (await scheduler.GetTrigger(triggerKeyObj) == null)
+            throw new SWValidationException("ScheduleNotFound",
+                $"No default trigger found for job '{typeof(TScheduler).Name}'");
+
+        await scheduler.PauseTrigger(triggerKeyObj);
+    }
+
+    // -------------------------------------------------------------------------
+    // ResumeJob
+    // -------------------------------------------------------------------------
+
+    public async Task ResumeJob<TScheduler, TParam>(string scheduleKey)
+        where TScheduler : IScheduledJob<TParam>
+    {
+        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
+        if (jobDef == null)
+            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
+
+        var scheduler = await schedulerFactory.GetScheduler();
+        var jobKey    = new JobKey(scheduleKey, jobDef.Group);
+
+        if (!await scheduler.CheckExists(jobKey))
+            throw new SWValidationException("ScheduleNotFound", $"Schedule '{scheduleKey}' not found");
+
+        await scheduler.ResumeJob(jobKey);
+    }
+
+    public async Task ResumeJob<TScheduler>()
+        where TScheduler : IScheduledJob
+    {
+        var jobDef = jobsDiscovery.GetJobDefinition(typeof(TScheduler));
+        if (jobDef == null)
+            throw new SWValidationException("JobNotFound", $"Job {typeof(TScheduler).Name} not found");
+
+        var scheduler     = await schedulerFactory.GetScheduler();
+        var triggerKeyObj = new TriggerKey(Constants.DefaultTriggerKey(jobDef.Group), jobDef.Group);
+
+        if (await scheduler.GetTrigger(triggerKeyObj) == null)
+            throw new SWValidationException("ScheduleNotFound",
+                $"No default trigger found for job '{typeof(TScheduler).Name}'");
+
+        await scheduler.ResumeTrigger(triggerKeyObj);
+    }
+
+    // -------------------------------------------------------------------------
 
     public IEnumerable<IScheduledJobDefinition> GetJobDefinitions() => jobsDiscovery.All;
 }

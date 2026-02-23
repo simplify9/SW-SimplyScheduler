@@ -17,44 +17,43 @@ public class SchedulerController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Get all registered job definitions
-    /// </summary>
+    // =========================================================================
+    // Discovery
+    // =========================================================================
+
+    /// <summary>Returns all registered job definitions.</summary>
     [HttpGet("jobs")]
     public IActionResult GetJobs()
     {
         var jobs = _scheduler.GetJobDefinitions()
             .Select(j => new
             {
-                name = j.Name,
-                @namespace = j.Namespace,
-                hasParams = j.WithParams,
-                type = j.JobType.FullName
+                name       = j.Name,
+                group      = j.Group,
+                hasParams  = j.WithParams,
+                paramType  = j.JobParamsType?.Name,
+                type       = j.JobType.FullName
             });
 
         return Ok(jobs);
     }
 
+    // =========================================================================
+    // CountCustomersJob  (IScheduledJob — simple, attribute-scheduled)
+    // =========================================================================
+
     /// <summary>
-    /// Override the declarative schedule for CountCustomersJob
+    /// Override the cron expression for CountCustomersJob at runtime.
+    /// Replaces the single default trigger set by [Schedule].
     /// </summary>
     [HttpPost("count-customers/reschedule")]
-    public async Task<IActionResult> RescheduleCountCustomers([FromBody] string newCronExpression)
+    public async Task<IActionResult> RescheduleCountCustomers([FromBody] RescheduleRequest request)
     {
         try
         {
-            // First, unschedule the existing trigger (from [Schedule] attribute)
-            await _scheduler.UnscheduleJob("count-customers-every-minute");
-
-            // Create new schedule with different cron
-            var triggerKey = await _scheduler.Schedule<CountCustomersJob>(
-                cronExpression: newCronExpression,
-                triggerKey: "count-customers-custom"
-            );
-
-            _logger.LogInformation($"Rescheduled CountCustomersJob with cron: {newCronExpression}");
-
-            return Ok(new { triggerKey, cronExpression = newCronExpression });
+            await _scheduler.RescheduleJob<CountCustomersJob>(request.CronExpression);
+            _logger.LogInformation("Rescheduled CountCustomersJob → {Cron}", request.CronExpression);
+            return Ok(new { cronExpression = request.CronExpression });
         }
         catch (Exception ex)
         {
@@ -63,144 +62,262 @@ public class SchedulerController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Trigger CountCustomersJob immediately
-    /// </summary>
-    [HttpPost("count-customers/trigger")]
-    public async Task<IActionResult> TriggerCountCustomersNow()
+    /// <summary>Pause the default trigger of CountCustomersJob.</summary>
+    [HttpPost("count-customers/pause")]
+    public async Task<IActionResult> PauseCountCustomers()
     {
         try
         {
-            //await _scheduler.TriggerJobNow<CountCustomersJob>();
-            return Ok(new { message = "Job triggered successfully" });
+            await _scheduler.PauseJob<CountCustomersJob>();
+            return Ok(new { message = "CountCustomersJob paused" });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    /// <summary>Resume the default trigger of CountCustomersJob.</summary>
+    [HttpPost("count-customers/resume")]
+    public async Task<IActionResult> ResumeCountCustomers()
+    {
+        try
+        {
+            await _scheduler.ResumeJob<CountCustomersJob>();
+            return Ok(new { message = "CountCustomersJob resumed" });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    /// <summary>Remove the default trigger of CountCustomersJob.</summary>
+    [HttpDelete("count-customers")]
+    public async Task<IActionResult> UnscheduleCountCustomers()
+    {
+        try
+        {
+            await _scheduler.UnscheduleJob<CountCustomersJob>();
+            return Ok(new { message = "CountCustomersJob unscheduled" });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    // =========================================================================
+    // SendCustomerEmailsJob  (IScheduledJob<SendEmailsParams> — parameterized)
+    // =========================================================================
+
+    /// <summary>
+    /// Create a recurring email campaign on a cron schedule.
+    /// Each campaign gets its own scheduleKey so multiple can coexist.
+    /// </summary>
+    [HttpPost("send-emails/schedule")]
+    public async Task<IActionResult> ScheduleEmailCampaign([FromBody] ScheduleEmailCampaignRequest request)
+    {
+        try
+        {
+            var @params = new SendEmailsParams(
+                Subject: request.Subject,
+                Body: request.Body,
+                FilterByDomain: request.FilterByDomain);
+
+            await _scheduler.Schedule<SendCustomerEmailsJob, SendEmailsParams>(
+                param:         @params,
+                cronExpression: request.CronExpression,
+                scheduleKey:   request.ScheduleKey,
+                config:        request.Config);
+
+            _logger.LogInformation("Scheduled email campaign '{Key}' → {Cron}", request.ScheduleKey, request.CronExpression);
+            return Ok(new { scheduleKey = request.ScheduleKey, cronExpression = request.CronExpression });
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to schedule email campaign");
             return BadRequest(new { error = ex.Message });
         }
     }
 
     /// <summary>
-    /// Schedule SendCustomerEmailsJob to run once at a specific time
+    /// Send a one-off email batch immediately (or at a specific time).
+    /// Returns the auto-generated scheduleKey.
     /// </summary>
     [HttpPost("send-emails/schedule-once")]
-    public async Task<IActionResult> ScheduleEmailsOnce([FromBody] DateTime runAt)
+    public async Task<IActionResult> ScheduleEmailsOnce([FromBody] ScheduleEmailOnceRequest request)
     {
         try
         {
-            var triggerKey = await _scheduler.ScheduleOnce<SendCustomerEmailsJob>(
-                runAt: runAt
-            );
+            var @params = new SendEmailsParams(
+                Subject: request.Subject,
+                Body: request.Body,
+                FilterByDomain: request.FilterByDomain);
 
-            return Ok(new { triggerKey, scheduledFor = runAt });
+            var scheduleKey = await _scheduler.ScheduleOnce<SendCustomerEmailsJob, SendEmailsParams>(
+                param:  @params,
+                runAt:  request.RunAt);
+
+            return Ok(new { scheduleKey, scheduledFor = request.RunAt ?? DateTime.UtcNow });
         }
-        catch (Exception ex)
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    /// <summary>Reschedule an existing email campaign to a new cron expression.</summary>
+    [HttpPost("send-emails/{scheduleKey}/reschedule")]
+    public async Task<IActionResult> RescheduleEmailCampaign(string scheduleKey, [FromBody] RescheduleRequest request)
+    {
+        try
         {
-            return BadRequest(new { error = ex.Message });
+            await _scheduler.RescheduleJob<SendCustomerEmailsJob, SendEmailsParams>(scheduleKey, request.CronExpression);
+            return Ok(new { scheduleKey, cronExpression = request.CronExpression });
         }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    /// <summary>Pause an email campaign by its scheduleKey.</summary>
+    [HttpPost("send-emails/{scheduleKey}/pause")]
+    public async Task<IActionResult> PauseEmailCampaign(string scheduleKey)
+    {
+        try
+        {
+            await _scheduler.PauseJob<SendCustomerEmailsJob, SendEmailsParams>(scheduleKey);
+            return Ok(new { message = $"Campaign '{scheduleKey}' paused" });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    /// <summary>Resume a paused email campaign.</summary>
+    [HttpPost("send-emails/{scheduleKey}/resume")]
+    public async Task<IActionResult> ResumeEmailCampaign(string scheduleKey)
+    {
+        try
+        {
+            await _scheduler.ResumeJob<SendCustomerEmailsJob, SendEmailsParams>(scheduleKey);
+            return Ok(new { message = $"Campaign '{scheduleKey}' resumed" });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    /// <summary>Cancel an email campaign permanently.</summary>
+    [HttpDelete("send-emails/{scheduleKey}")]
+    public async Task<IActionResult> UnscheduleEmailCampaign(string scheduleKey)
+    {
+        try
+        {
+            await _scheduler.UnscheduleJob<SendCustomerEmailsJob, SendEmailsParams>(scheduleKey);
+            return Ok(new { message = $"Campaign '{scheduleKey}' removed" });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    // =========================================================================
+    // NotifyCustomerJob  (IScheduledJob<NotifyCustomerParams> — parameterized)
+    // =========================================================================
+
+    /// <summary>
+    /// Schedule a recurring notification for a specific customer.
+    /// </summary>
+    [HttpPost("notify-customer/schedule")]
+    public async Task<IActionResult> ScheduleNotification([FromBody] ScheduleNotificationRequest request)
+    {
+        try
+        {
+            var @params = new NotifyCustomerParams(
+                CustomerId: request.CustomerId,
+                Channel:    request.Channel,
+                Message:    request.Message);
+
+            await _scheduler.Schedule<NotifyCustomerJob, NotifyCustomerParams>(
+                param:         @params,
+                cronExpression: request.CronExpression,
+                scheduleKey:   request.ScheduleKey);
+
+            return Ok(new { scheduleKey = request.ScheduleKey, cronExpression = request.CronExpression });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     /// <summary>
-    /// Pause a scheduled job
+    /// Send a one-off notification to a customer immediately or at a given time.
     /// </summary>
-    [HttpPost("pause/{triggerKey}")]
-    public async Task<IActionResult> PauseJob(string triggerKey)
+    [HttpPost("notify-customer/schedule-once")]
+    public async Task<IActionResult> NotifyCustomerOnce([FromBody] NotifyCustomerOnceRequest request)
     {
         try
         {
-            await _scheduler.PauseJob(triggerKey);
-            return Ok(new { message = $"Job {triggerKey} paused" });
+            var @params = new NotifyCustomerParams(
+                CustomerId: request.CustomerId,
+                Channel:    request.Channel,
+                Message:    request.Message);
+
+            var scheduleKey = await _scheduler.ScheduleOnce<NotifyCustomerJob, NotifyCustomerParams>(
+                param:  @params,
+                runAt:  request.RunAt);
+
+            return Ok(new { scheduleKey, scheduledFor = request.RunAt ?? DateTime.UtcNow });
         }
-        catch (Exception ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    /// <summary>
-    /// Resume a paused job
-    /// </summary>
-    [HttpPost("resume/{triggerKey}")]
-    public async Task<IActionResult> ResumeJob(string triggerKey)
+    /// <summary>Pause a customer notification schedule.</summary>
+    [HttpPost("notify-customer/{scheduleKey}/pause")]
+    public async Task<IActionResult> PauseNotification(string scheduleKey)
     {
         try
         {
-            await _scheduler.ResumeJob(triggerKey);
-            return Ok(new { message = $"Job {triggerKey} resumed" });
+            await _scheduler.PauseJob<NotifyCustomerJob, NotifyCustomerParams>(scheduleKey);
+            return Ok(new { message = $"Notification '{scheduleKey}' paused" });
         }
-        catch (Exception ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    /// <summary>
-    /// Unschedule a job
-    /// </summary>
-    [HttpDelete("{triggerKey}")]
-    public async Task<IActionResult> UnscheduleJob(string triggerKey)
+    /// <summary>Resume a paused customer notification schedule.</summary>
+    [HttpPost("notify-customer/{scheduleKey}/resume")]
+    public async Task<IActionResult> ResumeNotification(string scheduleKey)
     {
         try
         {
-            await _scheduler.UnscheduleJob(triggerKey);
-            return Ok(new { message = $"Job {triggerKey} unscheduled" });
+            await _scheduler.ResumeJob<NotifyCustomerJob, NotifyCustomerParams>(scheduleKey);
+            return Ok(new { message = $"Notification '{scheduleKey}' resumed" });
         }
-        catch (Exception ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    /// <summary>
-    /// Example: Schedule a job with user-defined cron expression
-    /// </summary>
-    [HttpPost("custom-schedule")]
-    public async Task<IActionResult> CreateCustomSchedule(
-        [FromBody] CreateScheduleRequest request)
+    /// <summary>Remove a customer notification schedule.</summary>
+    [HttpDelete("notify-customer/{scheduleKey}")]
+    public async Task<IActionResult> UnscheduleNotification(string scheduleKey)
     {
         try
         {
-            string triggerKey;
-
-            // Schedule based on job type
-            switch (request.JobType.ToLower())
-            {
-                case "countcustomers":
-                    triggerKey = await _scheduler.Schedule<CountCustomersJob>(
-                        cronExpression: request.CronExpression,
-                        triggerKey: request.TriggerKey
-                    );
-                    break;
-
-                case "sendemails":
-                    triggerKey = await _scheduler.Schedule<SendCustomerEmailsJob>(
-                        cronExpression: request.CronExpression,
-                        triggerKey: request.TriggerKey
-                    );
-                    break;
-
-                default:
-                    return BadRequest(new { error = "Unknown job type" });
-            }
-
-            return Ok(new
-            {
-                triggerKey,
-                jobType = request.JobType,
-                cronExpression = request.CronExpression,
-                message = "Job scheduled successfully"
-            });
+            await _scheduler.UnscheduleJob<NotifyCustomerJob, NotifyCustomerParams>(scheduleKey);
+            return Ok(new { message = $"Notification '{scheduleKey}' removed" });
         }
-        catch (Exception ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
     }
 }
 
-public class CreateScheduleRequest
-{
-    public string JobType { get; set; } = string.Empty;
-    public string CronExpression { get; set; } = string.Empty;
-    public string? TriggerKey { get; set; }
-}
+// =========================================================================
+// Request DTOs
+// =========================================================================
+
+public record RescheduleRequest(string CronExpression);
+
+public record ScheduleEmailCampaignRequest(
+    string ScheduleKey,
+    string CronExpression,
+    string Subject,
+    string Body,
+    string? FilterByDomain = null,
+    ScheduleConfig? Config = null);
+
+public record ScheduleEmailOnceRequest(
+    string Subject,
+    string Body,
+    string? FilterByDomain = null,
+    DateTime? RunAt = null);
+
+public record ScheduleNotificationRequest(
+    string ScheduleKey,
+    string CronExpression,
+    int CustomerId,
+    string Channel,
+    string Message);
+
+public record NotifyCustomerOnceRequest(
+    int CustomerId,
+    string Channel,
+    string Message,
+    DateTime? RunAt = null);

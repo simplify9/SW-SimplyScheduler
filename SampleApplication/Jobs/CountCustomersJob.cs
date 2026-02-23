@@ -1,10 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using SampleApplication.Data;
-using SW.PrimitiveTypes; // contains IScheduledJob
+using SW.PrimitiveTypes;
 
 namespace SampleApplication.Jobs;
 
-[Schedule("0 * * * * ?", TriggerKey = "count-customers-every-minute", Description = "Count customers every minute")]
+/// <summary>
+/// Counts all customers and logs the total.
+/// Runs every minute by default via the [Schedule] attribute.
+/// Concurrent executions are disallowed and misfired triggers fire once.
+/// </summary>
+[Schedule("0 * * * * ?", Description = "Count customers every minute")]
+[ScheduleConfig(AllowConcurrentExecution = false, MisfireInstructions = MisfireInstructions.FireOnce)]
 public class CountCustomersJob : IScheduledJob
 {
     private readonly AppDbContext _db;
@@ -17,4 +23,3 @@ public class CountCustomersJob : IScheduledJob
         Console.WriteLine($"[CountCustomersJob] Total customers: {total} @ {DateTimeOffset.UtcNow:O}");
     }
 }
-
