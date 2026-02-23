@@ -1,10 +1,11 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SW.PrimitiveTypes;
 
 namespace SW.Scheduler;
 
-internal class JobsDiscovery(IServiceProvider sp)
+internal class JobsDiscovery(IServiceProvider sp, ILogger<JobsDiscovery> logger)
 {
     private IReadOnlyCollection<ScheduledJobDefinition> Load()
     {
@@ -13,7 +14,6 @@ internal class JobsDiscovery(IServiceProvider sp)
         var backgroundJobs = scope.ServiceProvider.GetServices<IScheduledJob>();
 
         foreach (var backgroundJob in backgroundJobs)
-
             backgroundJobDefinitions.Add(new ScheduledJobDefinition
             {
                 JobType = backgroundJob.GetType(),
@@ -21,26 +21,14 @@ internal class JobsDiscovery(IServiceProvider sp)
                                throw new InvalidOperationException("Execute method not found")
             });
 
-
         var backgroundJobsWithParams = scope.ServiceProvider.GetServices<IScheduledJobWithParams>();
         foreach (var backgroundJobWithParams in backgroundJobsWithParams)
-            // foreach (var jobWithParams in markedAsBackgroundJobWithParams.GetType().GetTypeInfo().ImplementedInterfaces.Where(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IScheduledJob<>)))
-            //     backgroundJobDefinitions.Add(new BackgroundJobDefinition()
-            //     {
-            //         JobType = jobWithParams,
-            //         JobParamsType = jobWithParams.GetGenericArguments()[0],
-            //         JobParamsTypeName = jobWithParams.GetGenericArguments()[0]?.AssemblyQualifiedName ?? 
-            //                             throw new InvalidOperationException("JobParamsType not found"),
-            //         ExecutMethod = jobWithParams.GetMethod(nameof(IScheduledJob.Execute)) ?? 
-            //                  throw new InvalidOperationException("Execute method not found")
-            //     });
         {
             var backgroundJobsWithParamsAsIScheduledJobOf = backgroundJobWithParams.GetType().GetTypeInfo().ImplementedInterfaces.FirstOrDefault(x =>
                 x.IsGenericType && x.GetGenericTypeDefinition() == typeof(IScheduledJob<>));
-            if(backgroundJobsWithParamsAsIScheduledJobOf == null)
+            if (backgroundJobsWithParamsAsIScheduledJobOf == null)
                 continue;
-            
-            
+
             backgroundJobDefinitions.Add(new ScheduledJobDefinition
             {
                 JobType = backgroundJobWithParams.GetType(),
@@ -49,7 +37,18 @@ internal class JobsDiscovery(IServiceProvider sp)
                                throw new InvalidOperationException("Execute method not found")
             });
         }
-        
+
+        // Warn about any duplicate group names — these would cause silent lookup collisions.
+        var duplicates = backgroundJobDefinitions
+            .GroupBy(d => d.Group)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        foreach (var dup in duplicates)
+            logger.LogWarning(
+                "Multiple job types share the same group '{Group}'. " +
+                "Ensure all job classes have unique names within their namespace segment.", dup);
 
         return backgroundJobDefinitions;
     }
@@ -62,9 +61,8 @@ internal class JobsDiscovery(IServiceProvider sp)
     }
 
     public ScheduledJobDefinition GetJobDefinition(string jobName, string group) =>
-        All.SingleOrDefault(x =>
-            x.Name == jobName && x.Group == group);
-    
+        All.FirstOrDefault(x => x.Name == jobName && x.Group == group);
+
     public ScheduledJobDefinition GetJobDefinition(Type jobType) =>
-        All.SingleOrDefault(x => x.JobType == jobType);
+        All.FirstOrDefault(x => x.JobType == jobType);
 }
