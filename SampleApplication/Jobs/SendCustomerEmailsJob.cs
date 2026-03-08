@@ -20,6 +20,7 @@ public record SendEmailsParams(
 /// Allows concurrent execution so multiple campaigns can run simultaneously.
 /// </summary>
 [ScheduleConfig(AllowConcurrentExecution = true, MisfireInstructions = MisfireInstructions.Skip)]
+[RetryConfig(MaxRetries = 5, RetryAfterMinutes = 10)]
 public class SendCustomerEmailsJob : IScheduledJob<SendEmailsParams>
 {
     private readonly AppDbContext _db;

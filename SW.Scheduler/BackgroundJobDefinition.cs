@@ -44,10 +44,3 @@ internal class ScheduledJobDefinition : IScheduledJobDefinition
     /// </summary>
     public string Group => JobKeyConventions.GroupFromType(JobType);
 }
-
-public class BackgroundJobOptions
-{
-    public int? RetryCount { get; set; }
-    public uint? RetryAfterSeconds { get; set; }
-    public int? Priority { get; set; }
-}

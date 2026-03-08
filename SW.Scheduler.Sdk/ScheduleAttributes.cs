@@ -32,7 +32,38 @@ public class ScheduleAttribute : Attribute
 }
 
 /// <summary>
-/// Declaratively configures execution behaviour for a scheduled job.
+/// Declaratively configures the self-rescheduling retry strategy for a scheduled job.
+/// When a job execution throws an exception the scheduler will catch it, increment a
+/// persistent retry counter in the job's data map, and schedule a new one-time trigger
+/// at <c>now + <see cref="RetryAfterMinutes"/></c> — up to <see cref="MaxRetries"/> times.
+/// The current execution always finishes cleanly so Quartz does not mark it as failed.
+/// <para>
+/// Applicable to both <see cref="IScheduledJob"/> and <see cref="IScheduledJob{TParam}"/> implementations.
+/// At runtime, retry behaviour can be overridden via <see cref="ScheduleConfig.Retry"/>.
+/// </para>
+/// </summary>
+/// <example>
+/// <code>
+/// [RetryConfig(MaxRetries = 5, RetryAfterMinutes = 10)]
+/// public class MyJob : IScheduledJob { ... }
+/// </code>
+/// </example>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public class RetryConfigAttribute : Attribute
+{
+    /// <summary>
+    /// Maximum number of retry attempts after the initial failure.
+    /// Default: <c>3</c>.
+    /// </summary>
+    public int MaxRetries { get; set; } = 3;
+
+    /// <summary>
+    /// How many minutes to wait before each retry attempt.
+    /// Default: <c>5</c> minutes.
+    /// </summary>
+    public double RetryAfterMinutes { get; set; } = 5;
+}
+
 /// Controls concurrency, crash-recovery, and misfire handling.
 /// When omitted, defaults apply: no concurrency, recovery enabled, misfire fires once.
 /// <para>

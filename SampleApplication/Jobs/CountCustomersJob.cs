@@ -11,6 +11,7 @@ namespace SampleApplication.Jobs;
 /// </summary>
 [Schedule("0 * * * * ?", Description = "Count customers every minute")]
 [ScheduleConfig(AllowConcurrentExecution = false, MisfireInstructions = MisfireInstructions.FireOnce)]
+[RetryConfig(MaxRetries = 3, RetryAfterMinutes = 2)]
 public class CountCustomersJob : IScheduledJob
 {
     private readonly AppDbContext _db;

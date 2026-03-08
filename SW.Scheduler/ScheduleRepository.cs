@@ -6,66 +6,75 @@ namespace SW.Scheduler;
 
 internal static class Constants
 {
-    public const string JobParamsKey = "JobParams";
+    public const string JobParamsKey    = "JobParams";
+    public const string JobTypeNameKey  = "JobTypeName";
+    public const string JobGroupKey     = "JobGroup";
 
-    /// <summary>
-    /// Stores the original job type name in a dedicated parameterized job's data map
-    /// so the executor can find the correct ScheduledJobDefinition.
-    /// </summary>
-    public const string JobTypeNameKey = "JobTypeName";
+    // Retry state — written/read by the executor on each attempt.
+    public const string RetryCountKey        = "RetryCount";
+    public const string RetryMaxKey          = "RetryMax";
+    public const string RetryAfterMinutesKey = "RetryAfterMinutes";
+    public const string LastErrorKey         = "LastError";
 
-    /// <summary>
-    /// Stores the job group in a dedicated parameterized job's data map
-    /// so the executor can find the correct ScheduledJobDefinition by group.
-    /// </summary>
-    public const string JobGroupKey = "JobGroup";
-
-    /// <summary>
-    /// Produces the single deterministic trigger key used for a simple (no-param) job.
-    /// </summary>
-    public static string DefaultTriggerKey(string group) => $"{group}_Default";
-
-    /// <summary>
-    /// Produces the trigger key name for a dedicated parameterized-job schedule.
-    /// </summary>
+    public static string DefaultTriggerKey(string group)          => $"{group}_Default";
     public static string ParameterizedTriggerKey(string scheduleKey) => $"{scheduleKey}_Trigger";
+    public static string RetryTriggerKey(string baseKey, int attempt) => $"{baseKey}_Retry_{attempt}";
 }
 
 internal static class ScheduleConfigExtensions
 {
     /// <summary>
-    /// Builds a <see cref="ScheduleConfig"/> from a <see cref="ScheduleConfigAttribute"/>, or returns defaults.
+    /// Builds a <see cref="ScheduleConfig"/> from <see cref="ScheduleConfigAttribute"/>
+    /// and <see cref="RetryConfigAttribute"/> on the job type, or returns defaults.
     /// </summary>
     public static ScheduleConfig FromAttribute(Type jobType)
     {
-        var attr = jobType.GetCustomAttributes(typeof(ScheduleConfigAttribute), false)
+        var configAttr = jobType.GetCustomAttributes(typeof(ScheduleConfigAttribute), false)
             .FirstOrDefault() as ScheduleConfigAttribute;
 
-        return attr == null
+        var retryAttr = jobType.GetCustomAttributes(typeof(RetryConfigAttribute), false)
+            .FirstOrDefault() as RetryConfigAttribute;
+
+        var config = configAttr == null
             ? new ScheduleConfig()
             : new ScheduleConfig
             {
-                AllowConcurrentExecution = attr.AllowConcurrentExecution,
-                RequestsRecovery = attr.RequestsRecovery,
-                MisfireInstructions = attr.MisfireInstructions
+                AllowConcurrentExecution = configAttr.AllowConcurrentExecution,
+                RequestsRecovery         = configAttr.RequestsRecovery,
+                MisfireInstructions      = configAttr.MisfireInstructions
             };
+
+        if (retryAttr != null)
+        {
+            config.EnableRetry       = true;
+            config.MaxRetries        = retryAttr.MaxRetries;
+            config.RetryAfterMinutes = retryAttr.RetryAfterMinutes;
+        }
+
+        return config;
     }
 
     /// <summary>
     /// Applies <see cref="ScheduleConfig"/> to a <see cref="JobBuilder"/>:
-    /// sets recovery and, when concurrency is disallowed, marks the job accordingly.
+    /// sets recovery, disallows concurrency when configured, and stores retry settings
+    /// in the job's data map so the executor can access them at runtime.
     /// </summary>
     public static JobBuilder ApplyConfig(this JobBuilder builder, ScheduleConfig config)
     {
         builder = builder.RequestRecovery(config.RequestsRecovery);
+
         if (!config.AllowConcurrentExecution)
             builder = builder.DisallowConcurrentExecution();
+
+        if (config.EnableRetry)
+            builder = builder
+                .UsingJobData(Constants.RetryMaxKey,          config.MaxRetries)
+                .UsingJobData(Constants.RetryAfterMinutesKey, config.RetryAfterMinutes);
+
         return builder;
     }
 
-    /// <summary>
-    /// Applies misfire instructions to a <see cref="CronScheduleBuilder"/>.
-    /// </summary>
+    /// <summary>Applies misfire instructions to a <see cref="CronScheduleBuilder"/>.</summary>
     public static CronScheduleBuilder ApplyMisfire(this CronScheduleBuilder builder, MisfireInstructions misfire)
         => misfire switch
         {
