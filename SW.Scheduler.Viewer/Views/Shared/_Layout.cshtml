@@ -1,0 +1,123 @@
+@{
+    var title = ViewBag.Title as string ?? "Scheduler";
+    var basePath = ViewBag.BasePath as string ?? "/scheduler-management";
+}
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>@title — SW.Scheduler</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@picocss/pico@@2/css/pico.min.css"/>
+    <script src="https://unpkg.com/htmx.org@@2.0.4/dist/htmx.min.js"></script>
+    <script>
+        // Inject the ASP.NET Core antiforgery token into every HTMX non-GET request.
+        // The token is embedded as a hidden input by @Html.AntiForgeryToken() inside each form.
+        htmx.on("htmx:configRequest", function(evt) {
+            if (evt.detail.verb !== "get") {
+                var token = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (!token) {
+                    // Fallback: look inside the form that triggered the request
+                    var form = evt.detail.elt.closest("form");
+                    if (form) token = form.querySelector('input[name="__RequestVerificationToken"]');
+                }
+                if (token) evt.detail.headers["RequestVerificationToken"] = token.value;
+            }
+        });
+    </script>
+    <style>
+        body { padding: 0; margin: 0; }
+
+        /* ── top nav ── */
+        nav.sw-nav {
+            background: var(--pico-primary);
+            padding: .65rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+        }
+        nav.sw-nav a, nav.sw-nav span { color: #fff; text-decoration: none; }
+        nav.sw-nav .brand { font-weight: 700; font-size: 1.1rem; }
+        nav.sw-nav .nav-link { font-size: .88rem; opacity: .85; }
+        nav.sw-nav .nav-link:hover { opacity: 1; }
+        nav.sw-nav .spacer { margin-left: auto; font-size: .78rem; opacity: .6; }
+
+        /* ── page ── */
+        .sw-main { padding: 1.5rem 2rem; }
+
+        /* ── stat cards ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            border-radius: .75rem;
+            padding: 1rem 1.25rem;
+        }
+        .stat-card .stat-value { font-size: 2rem; font-weight: 700; }
+        .stat-card .stat-label { font-size: .82rem; opacity: .75; margin-top: .1rem; }
+
+        /* ── badges ── */
+        .badge {
+            display: inline-block;
+            padding: .15rem .55rem;
+            border-radius: 999px;
+            font-size: .74rem;
+            font-weight: 700;
+        }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-fail    { background: #fee2e2; color: #991b1b; }
+        .badge-running { background: #dbeafe; color: #1e40af; }
+        .badge-warn    { background: #fef3c7; color: #92400e; }
+        .badge-muted   { background: #f3f4f6; color: #6b7280; }
+
+        /* ── misc ── */
+        .mono { font-family: monospace; font-size: .82rem; }
+        .error-box {
+            background: #fee2e2; border: 1px solid #fca5a5;
+            border-radius: .5rem; padding: .75rem 1rem; color: #991b1b;
+        }
+        table { font-size: .87rem; }
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
+        .section-header {
+            display: flex; align-items: center;
+            justify-content: space-between; margin-bottom: .75rem;
+        }
+        .section-header h3 { margin: 0; }
+
+        /* ── job management ── */
+        .job-actions { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+        .job-actions button { width: auto; padding: .25rem .65rem; font-size: .78rem; margin: 0; }
+        .btn-danger  { background: #dc2626; border-color: #dc2626; color: #fff; }
+        .btn-danger:hover  { background: #b91c1c; border-color: #b91c1c; }
+        .btn-warn    { background: #d97706; border-color: #d97706; color: #fff; }
+        .btn-warn:hover    { background: #b45309; border-color: #b45309; }
+        .btn-ok      { background: #059669; border-color: #059669; color: #fff; }
+        .btn-ok:hover      { background: #047857; border-color: #047857; }
+        .inline-cron { display: flex; gap: .35rem; align-items: center; margin-top: .35rem; }
+        .inline-cron input { margin: 0; padding: .22rem .5rem; font-size: .78rem; width: 14rem; }
+        .inline-cron button { margin: 0; }
+        .row-error { color: #991b1b; font-size: .78rem; margin-top: .25rem; }
+    </style>
+</head>
+<body>
+
+<nav class="sw-nav">
+    <a class="brand" href="@basePath">@title</a>
+    <a class="nav-link" href="@basePath">Dashboard</a>
+    <a class="nav-link" href="@basePath/Running">⟳ Running</a>
+    <a class="nav-link" href="@basePath/History">📋 History</a>
+    <a class="nav-link" href="@basePath/Jobs">⚙️ Jobs</a>
+    <span class="spacer">SW.Scheduler Admin</span>
+</nav>
+
+<div class="sw-main" id="sw-content">
+    @RenderBody()
+</div>
+
+</body>
+</html>
+

@@ -1,0 +1,67 @@
+@using SW.PrimitiveTypes
+@model IReadOnlyList<JobExecution>
+@{
+    var basePath = ViewBag.BasePath as string ?? "/scheduler-management";
+    var showStatus = ViewBag.ShowStatus as bool? ?? true;
+}
+
+@if (Model.Count == 0)
+{
+    <p><em>No executions found.</em></p>
+}
+else
+{
+    <figure>
+        <table role="grid">
+            <thead>
+                <tr>
+                    <th>Job Type</th>
+                    <th>Schedule Key</th>
+                    <th>Started (UTC)</th>
+                    <th>Duration</th>
+                    @if (showStatus) { <th>Status</th> }
+                    <th>Node</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in Model)
+                {
+                    var scheduleKey = e.JobName == "MAIN" ? "" : e.JobName;
+                    var status = e.EndTimeUtc == null ? "running"
+                               : e.Success == true    ? "success"
+                               : "fail";
+                    <tr>
+                        <td><span class="mono">@e.JobTypeName</span></td>
+                        <td><span class="mono">@scheduleKey</span></td>
+                        <td>@e.StartTimeUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td>@(e.DurationMs.HasValue ? $"{e.DurationMs:N0} ms" : "…")</td>
+                        @if (showStatus)
+                        {
+                            <td>
+                                @if (status == "success")
+                                { <span class="badge badge-success">✓ Success</span> }
+                                else if (status == "fail")
+                                { <span class="badge badge-fail">✗ Failed</span> }
+                                else
+                                { <span class="badge badge-running">⟳ Running</span> }
+                            </td>
+                        }
+                        <td>@e.Node</td>
+                        <td>
+                            <a href="@basePath/Detail/@e.FireInstanceId"
+                               hx-get="@basePath/Detail/@e.FireInstanceId"
+                               hx-target="#sw-content"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               style="font-size:.8rem;">
+                                Detail →
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </figure>
+}
+

@@ -1,16 +1,25 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <Authors>SimplyWorks</Authors>
-        <Company>SimplyWorks</Company>
-        <Product>SimplyWorks.Scheduler</Product>
-        <PackageId>SimplyWorks.Scheduler</PackageId>
-    </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
 
-    <ItemGroup>
-      <PackageReference Include="SimplyWorks.HttpExtensions" Version="8.1.0" />
-      <PackageReference Include="SimplyWorks.PrimitiveTypes" Version="8.1.2" />
-    </ItemGroup>
+    <PackageId>SimplyWorks.Scheduler.Sdk</PackageId>
+    <Authors>Simplify9</Authors>
+    <Product>SimplyWorks.Scheduler.Sdk</Product>
+    <Description>Lightweight SDK for defining scheduled jobs with SW.Scheduler. Reference this package in projects that declare IScheduledJob or IScheduledJob&lt;TParam&gt; implementations — no Quartz dependency required.</Description>
+    <PackageTags>scheduler quartz jobs background cron simplifyworks</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/simplify9/SW-SimplyScheduler</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/simplify9/SW-SimplyScheduler</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>See https://github.com/simplify9/SW-SimplyScheduler/releases for release notes.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
 
 </Project>

@@ -1,0 +1,109 @@
+@model SW.Scheduler.Viewer.JobRowViewModel
+@{
+    Layout = null;
+    var basePath = ViewBag.BasePath as string ?? "/scheduler-management";
+    var job      = Model.Job;
+    var error    = ViewBag.Error as string ?? Model.Error;
+
+    // Row id used as the HTMX swap target
+    var rowId    = $"job-row-{job.Group.Replace(".", "-")}-{job.Name.Replace(".", "-")}";
+
+    var stateClass = job.TriggerState switch
+    {
+        "Paused"   => "badge-warn",
+        "None"     => "badge-muted",
+        "Error"    => "badge-fail",
+        "Blocked"  => "badge-warn",
+        _          => "badge-running"
+    };
+    var stateBadge = job.TriggerState switch
+    {
+        "Normal"   => "✅ Active",
+        "Paused"   => "⏸ Paused",
+        "None"     => "— Unscheduled",
+        "Error"    => "❌ Error",
+        "Blocked"  => "⚠ Blocked",
+        _          => job.TriggerState
+    };
+    var isPaused      = job.TriggerState == "Paused";
+    var isUnscheduled = job.TriggerState == "None";
+}
+<tr id="@rowId">
+    <td>
+        <span class="mono">@job.TypeName</span>
+        @if (job.IsParameterized)
+        {
+            <br/><small style="opacity:.6">key: @job.Name</small>
+        }
+    </td>
+    <td><span class="mono" style="font-size:.78rem;opacity:.7">@job.Group</span></td>
+    <td><span class="badge @stateClass">@stateBadge</span></td>
+    <td class="mono">@(job.CronExpression ?? "—")</td>
+    <td class="mono">@(job.NextFireTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</td>
+    <td class="mono">@(job.PreviousFireTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</td>
+    <td>
+        <div class="job-actions">
+            @if (isPaused)
+            {
+                <form method="post" action="@basePath/Jobs/Resume"
+                      hx-post="@basePath/Jobs/Resume"
+                      hx-target="#@rowId"
+                      hx-swap="outerHTML">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="group" value="@job.Group"/>
+                    <input type="hidden" name="name"  value="@job.Name"/>
+                    <button type="submit" class="btn-ok">▶ Resume</button>
+                </form>
+            }
+            else if (!isUnscheduled)
+            {
+                <form method="post" action="@basePath/Jobs/Pause"
+                      hx-post="@basePath/Jobs/Pause"
+                      hx-target="#@rowId"
+                      hx-swap="outerHTML">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="group" value="@job.Group"/>
+                    <input type="hidden" name="name"  value="@job.Name"/>
+                    <button type="submit" class="btn-warn">⏸ Pause</button>
+                </form>
+            }
+
+            <form method="post" action="@basePath/Jobs/Unschedule"
+                  hx-post="@basePath/Jobs/Unschedule"
+                  hx-target="#@rowId"
+                  hx-swap="outerHTML"
+                  hx-confirm="Remove triggers for '@job.TypeName'?">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="group" value="@job.Group"/>
+                <input type="hidden" name="name"  value="@job.Name"/>
+                <button type="submit" class="btn-danger">🗑 Unschedule</button>
+            </form>
+        </div>
+
+        @* Inline reschedule form — only shown when there is a trigger to replace *@
+        @if (!isUnscheduled)
+        {
+            <form method="post" action="@basePath/Jobs/Reschedule"
+                  hx-post="@basePath/Jobs/Reschedule"
+                  hx-target="#@rowId"
+                  hx-swap="outerHTML"
+                  class="inline-cron">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="group" value="@job.Group"/>
+                <input type="hidden" name="name"  value="@job.Name"/>
+                <input type="text"
+                       name="cronExpression"
+                       placeholder="0 0 8 * * ?"
+                       value="@job.CronExpression"
+                       title="Quartz cron: sec min hr dom mon dow"/>
+                <button type="submit">↺ Reschedule</button>
+            </form>
+        }
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div class="row-error">⚠ @error</div>
+        }
+    </td>
+</tr>
+
