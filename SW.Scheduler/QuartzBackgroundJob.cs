@@ -1,7 +1,10 @@
+using System.Security.Claims;
+using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
+using SW.PrimitiveTypes;
 
 namespace SW.Scheduler;
 
@@ -47,6 +50,13 @@ internal static class QuartzJobExecutor
 
         // ── Resolve service from a fresh scope ───────────────────────────────
         using var scope = serviceProvider.CreateScope();
+        var schedulerOptions = scope.ServiceProvider.GetRequiredService<SchedulerOptions>();
+        var requestContext = scope.ServiceProvider.GetService<RequestContext>();
+        var identity = new GenericIdentity(schedulerOptions.SystemUserIdentifier);
+        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, schedulerOptions.SystemUserIdentifier));
+        var principal = new ClaimsPrincipal(identity);
+        requestContext.Set(principal, null, Guid.NewGuid().ToString("N"));
+        
         var svc = scope.ServiceProvider.GetService(jobDefinition.JobType);
         if (svc == null)
         {

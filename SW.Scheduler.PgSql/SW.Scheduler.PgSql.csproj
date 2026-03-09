@@ -21,6 +21,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\SW.Scheduler\SW.Scheduler.csproj" />
+      <ProjectReference Include="..\SW.Scheduler.EfCore\SW.Scheduler.EfCore.csproj" />
     </ItemGroup>
 
 </Project>

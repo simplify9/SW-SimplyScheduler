@@ -4,43 +4,39 @@ using Quartz;
 using Quartz.Impl.AdoJobStore;
 using SW.PrimitiveTypes;
 
-namespace SW.Scheduler.PgSql;
+namespace SW.Scheduler.MySql;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers SW.Scheduler with a PostgreSQL-backed Quartz persistent store.
+    /// Registers SW.Scheduler with a MySQL/MariaDB-backed Quartz persistent store.
     ///
     /// In your DbContext's OnModelCreating call:
-    ///   modelBuilder.UseQuartzPostgreSql("quartz")
+    ///   modelBuilder.UseQuartzMySql()
     ///
     /// For job execution monitoring also call:
     ///   services.AddSchedulerMonitoring&lt;YourDbContext&gt;()
     /// </summary>
     /// <param name="services">The service collection.</param>
-    /// <param name="connectionString">PostgreSQL connection string.</param>
-    /// <param name="schema">Database schema for Quartz tables (required, e.g. "quartz").</param>
+    /// <param name="connectionString">MySQL connection string.</param>
     /// <param name="configureOptions">Optional callback to configure <see cref="SchedulerOptions"/>.</param>
-    /// <param name="configure">Optional PostgreSQL-specific Quartz options.</param>
+    /// <param name="configure">Optional MySQL-specific Quartz options.</param>
     /// <param name="assemblies">Assemblies to scan for scheduled jobs. Defaults to the calling assembly.</param>
-    public static IServiceCollection AddPgSqlScheduler(
+    public static IServiceCollection AddMySqlScheduler(
         this IServiceCollection services,
         string connectionString,
-        string schema,
         Action<SchedulerOptions>? configureOptions = null,
-        Action<QuartzPgSqlOptions>? configure = null,
+        Action<QuartzMySqlOptions>? configure = null,
         params Assembly[] assemblies)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new ArgumentException("Connection string is required", nameof(connectionString));
-        if (string.IsNullOrWhiteSpace(schema))
-            throw new ArgumentException("Schema is required for PostgreSQL", nameof(schema));
 
         if (assemblies.Length == 0) assemblies = [Assembly.GetCallingAssembly()];
 
-        var pgOptions = new QuartzPgSqlOptions { ConnectionString = connectionString, Schema = schema };
-        configure?.Invoke(pgOptions);
-        pgOptions.Validate();
+        var myOptions = new QuartzMySqlOptions { ConnectionString = connectionString };
+        configure?.Invoke(myOptions);
+        myOptions.Validate();
 
         SchedulerServiceCollectionExtensions.AddSchedulerCore(services, configureOptions, assemblies);
 
@@ -51,19 +47,22 @@ public static class ServiceCollectionExtensions
                 s.PerformSchemaValidation = true;
                 s.UseProperties = true;
                 s.RetryInterval = TimeSpan.FromSeconds(15);
-                s.UsePostgres(pg =>
+
+                s.UseMySql(mysql =>
                 {
-                    pg.UseDriverDelegate<PostgreSQLDelegate>();
-                    pg.ConnectionString = pgOptions.ConnectionString;
-                    pg.TablePrefix = $"{pgOptions.Schema}.{pgOptions.TablePrefix}";
+                    mysql.UseDriverDelegate<MySQLDelegate>();
+                    mysql.ConnectionString = myOptions.ConnectionString;
+                    mysql.TablePrefix = myOptions.TablePrefix;
                 });
+
                 s.UseSystemTextJsonSerializer();
-                if (pgOptions.EnableClustering)
+
+                if (myOptions.EnableClustering)
                 {
                     s.UseClustering(c =>
                     {
-                        c.CheckinMisfireThreshold = pgOptions.ClusteringMisfireThreshold;
-                        c.CheckinInterval = pgOptions.ClusteringCheckinInterval;
+                        c.CheckinMisfireThreshold = myOptions.ClusteringMisfireThreshold;
+                        c.CheckinInterval = myOptions.ClusteringCheckinInterval;
                     });
                 }
             });
@@ -75,21 +74,20 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Overload that configures connection string and schema via an options action.
+    /// Overload that configures all options via a single action.
     /// </summary>
-    public static IServiceCollection AddPgSqlScheduler(
+    public static IServiceCollection AddMySqlScheduler(
         this IServiceCollection services,
-        Action<QuartzPgSqlOptions> configure,
+        Action<QuartzMySqlOptions> configure,
         Action<SchedulerOptions>? configureOptions = null,
         params Assembly[] assemblies)
     {
-        var pgOptions = new QuartzPgSqlOptions();
-        configure(pgOptions);
-        pgOptions.Validate();
+        var myOptions = new QuartzMySqlOptions();
+        configure(myOptions);
+        myOptions.Validate();
 
-        return services.AddPgSqlScheduler(
-            pgOptions.ConnectionString,
-            pgOptions.Schema,
+        return services.AddMySqlScheduler(
+            myOptions.ConnectionString,
             configureOptions,
             configure,
             assemblies);

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Quartz;
 using SW.PrimitiveTypes;
+using SW.Scheduler.Monitoring;
 
 namespace SW.Scheduler;
 
@@ -13,7 +14,12 @@ public class SchedulerPreparation(IServiceProvider serviceProvider, ILogger<Sche
         using var scope = serviceProvider.CreateScope();
         var jobsDiscovery = scope.ServiceProvider.GetRequiredService<JobsDiscovery>();
         var schedulerFactory = scope.ServiceProvider.GetRequiredService<ISchedulerFactory>();
+        var schedulerOptions = scope.ServiceProvider.GetRequiredService<SchedulerOptions>();
         var scheduler = await schedulerFactory.GetScheduler(stoppingToken);
+
+        // Register job listener for monitoring
+        scheduler.ListenerManager.AddJobListener(
+            scope.ServiceProvider.GetRequiredService<JobExecutionListener>());
 
         foreach (var jobDefinition in jobsDiscovery.All)
         {
@@ -33,6 +39,9 @@ public class SchedulerPreparation(IServiceProvider serviceProvider, ILogger<Sche
                     jobDefinition.Group);
             }
         }
+
+        // Register the cleanup job (only meaningful when a monitoring store is registered)
+        await RegisterCleanupJob(scheduler, schedulerOptions, stoppingToken);
     }
 
     private async Task RegisterJob(IScheduler scheduler, ScheduledJobDefinition jobDefinition, CancellationToken stoppingToken)
@@ -105,6 +114,52 @@ public class SchedulerPreparation(IServiceProvider serviceProvider, ILogger<Sche
             await scheduler.RescheduleJob(triggerKey, newTrigger, stoppingToken);
             logger.LogInformation("Updated schedule for {Group} with cron: {Cron}",
                 jobDefinition.Group, scheduleAttr.CronExpression);
+        }
+    }
+
+    private async Task RegisterCleanupJob(IScheduler scheduler, SchedulerOptions options, CancellationToken ct)
+    {
+        const string cleanupGroup = "SW.Scheduler.Internal";
+        const string cleanupName  = "JobExecutionCleanup";
+
+        var jobKey     = new JobKey(cleanupName, cleanupGroup);
+        var triggerKey = new TriggerKey($"{cleanupName}_Trigger", cleanupGroup);
+
+        var job = JobBuilder.Create<JobExecutionCleanupJob>()
+            .WithIdentity(jobKey)
+            .StoreDurably()
+            .RequestRecovery(false)
+            .Build();
+
+        await scheduler.AddJob(job, replace: true, ct);
+
+        // Validate the cron expression — fail fast with a clear error if misconfigured.
+        if (!CronExpression.IsValidExpression(options.CleanupCronExpression))
+        {
+            logger.LogError(
+                "[Cleanup] Invalid CleanupCronExpression '{Cron}'. The cleanup job will not be scheduled.",
+                options.CleanupCronExpression);
+            return;
+        }
+
+        var newTrigger = TriggerBuilder.Create()
+            .WithIdentity(triggerKey)
+            .ForJob(jobKey)
+            .WithCronSchedule(options.CleanupCronExpression,
+                b => b.WithMisfireHandlingInstructionDoNothing())
+            .WithDescription($"Deletes JobExecution records older than {options.RetentionDays} days.")
+            .Build();
+
+        var existingTrigger = await scheduler.GetTrigger(triggerKey, ct);
+        if (existingTrigger == null)
+        {
+            await scheduler.ScheduleJob(newTrigger, ct);
+            logger.LogInformation("[Cleanup] Scheduled cleanup job with cron: {Cron}", options.CleanupCronExpression);
+        }
+        else
+        {
+            await scheduler.RescheduleJob(triggerKey, newTrigger, ct);
+            logger.LogDebug("[Cleanup] Updated cleanup job cron to: {Cron}", options.CleanupCronExpression);
         }
     }
 }

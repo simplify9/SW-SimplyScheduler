@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using SW.Scheduler.PgSql;
+using SW.Scheduler.EfCore;
 
 namespace SampleApplication.Data;
 
@@ -20,9 +20,10 @@ public class AppDbContext : DbContext
             b.HasIndex(c => c.Email).IsUnique();
         });
 
-        // Add Quartz.NET scheduler tables to this DbContext
-        // This will include Quartz tables in YOUR migrations
-        modelBuilder.UseQuartzPostgreSql(schema: "quartz");
+        // Include Quartz tables + JobExecution monitoring table in this DbContext's migrations.
+        // Pass the schema name when using PostgreSQL (optional for InMemory/SQLite).
+        // For PostgreSQL with a specific schema, use: modelBuilder.UseQuartzPostgreSql("quartz")
+        // For a database-agnostic setup, use: modelBuilder.ApplyScheduling()
+        modelBuilder.ApplyScheduling();
     }
 }
-
