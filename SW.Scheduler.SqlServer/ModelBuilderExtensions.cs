@@ -5,26 +5,26 @@ using SW.Scheduler.EfCore.EntityTypeConfigurations;
 namespace SW.Scheduler.SqlServer;
 
 /// <summary>
-/// Extension for configuring Quartz + JobExecution tables in a SQL Server DbContext.
+/// Extension for including scheduler tables in a SQL Server DbContext.
 /// Delegates to the shared entity type configurations in SW.Scheduler.EfCore
 /// using <see cref="QuartzColumnTypes.SqlServer"/> column types.
 /// </summary>
 public static class ModelBuilderExtensions
 {
     /// <summary>
-    /// Adds Quartz.NET scheduler tables and the <c>job_executions</c> monitoring table
+    /// Adds scheduler tables and the <c>job_executions</c> monitoring table
     /// to your DbContext for SQL Server.
     ///
     /// Call this in <c>OnModelCreating</c>:
     /// <code>
-    /// modelBuilder.UseQuartzSqlServer();              // dbo schema, QRTZ_ prefix
-    /// modelBuilder.UseQuartzSqlServer("scheduler");   // explicit schema
+    /// modelBuilder.UseSchedulerSqlServer();              // dbo schema, QRTZ_ prefix
+    /// modelBuilder.UseSchedulerSqlServer("scheduler");   // explicit schema
     /// </code>
     /// </summary>
     /// <param name="modelBuilder">The ModelBuilder instance.</param>
     /// <param name="schema">Database schema (optional, defaults to "dbo").</param>
-    /// <param name="tablePrefix">Table prefix for Quartz tables (default: "QRTZ_").</param>
-    public static ModelBuilder UseQuartzSqlServer(
+    /// <param name="tablePrefix">Table prefix for scheduler tables (default: "QRTZ_").</param>
+    public static ModelBuilder UseSchedulerSqlServer(
         this ModelBuilder modelBuilder,
         string schema = "dbo",
         string tablePrefix = "QRTZ_")

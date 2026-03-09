@@ -1,7 +1,6 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using SW.PrimitiveTypes;
 
 namespace SW.Scheduler;
 

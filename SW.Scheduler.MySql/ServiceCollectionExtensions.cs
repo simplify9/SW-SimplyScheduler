@@ -2,17 +2,17 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
 using Quartz.Impl.AdoJobStore;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SW.Scheduler.MySql;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers SW.Scheduler with a MySQL/MariaDB-backed Quartz persistent store.
+    /// Registers SW.Scheduler with a MySQL/MariaDB-backed persistent store.
     ///
     /// In your DbContext's OnModelCreating call:
-    ///   modelBuilder.UseQuartzMySql()
+    ///   modelBuilder.UseSchedulerMySql()
     ///
     /// For job execution monitoring also call:
     ///   services.AddSchedulerMonitoring&lt;YourDbContext&gt;()

@@ -2,18 +2,18 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
 using Quartz.Impl.AdoJobStore;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SW.Scheduler.SqlServer;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers SW.Scheduler with a SQL Server-backed Quartz persistent store.
+    /// Registers SW.Scheduler with a SQL Server-backed persistent store.
     ///
     /// In your DbContext's OnModelCreating call:
-    ///   modelBuilder.UseQuartzSqlServer()              // uses dbo schema
-    ///   modelBuilder.UseQuartzSqlServer("scheduler")   // explicit schema
+    ///   modelBuilder.UseSchedulerSqlServer()              // uses dbo schema
+    ///   modelBuilder.UseSchedulerSqlServer("scheduler")   // explicit schema
     ///
     /// For job execution monitoring also call:
     ///   services.AddSchedulerMonitoring&lt;YourDbContext&gt;()

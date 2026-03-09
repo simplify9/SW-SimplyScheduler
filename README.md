@@ -62,7 +62,7 @@ dotnet add package SimplyWorks.Scheduler.Viewer
 // MyApi/Jobs/DailyReportJob.cs
 // This project only needs SW.Scheduler.Sdk
 
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 [Schedule("0 0 8 * * ?", Description = "Daily report at 8 AM")]
 [RetryConfig(MaxRetries = 3, RetryAfterMinutes = 5)]
@@ -111,10 +111,10 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
     base.OnModelCreating(modelBuilder);
 
     // Pick the method that matches your provider:
-    modelBuilder.UseQuartzPostgreSql("quartz");   // SW.Scheduler.PgSql
-    // modelBuilder.UseQuartzSqlServer();          // SW.Scheduler.SqlServer
-    // modelBuilder.UseQuartzSqlServer("myschema");
-    // modelBuilder.UseQuartzMySql();              // SW.Scheduler.MySql
+    modelBuilder.UseSchedulerPostgreSql("quartz");   // SW.Scheduler.PgSql
+    // modelBuilder.UseSchedulerSqlServer();          // SW.Scheduler.SqlServer
+    // modelBuilder.UseSchedulerSqlServer("myschema");
+    // modelBuilder.UseSchedulerMySql();              // SW.Scheduler.MySql
 }
 ```
 
@@ -460,7 +460,7 @@ services.AddPgSqlScheduler(
 );
 
 // AppDbContext.OnModelCreating
-modelBuilder.UseQuartzPostgreSql("quartz");
+modelBuilder.UseSchedulerPostgreSql("quartz");
 ```
 
 ### SQL Server — `SW.Scheduler.SqlServer`
@@ -476,8 +476,8 @@ services.AddSqlServerScheduler(
 );
 
 // AppDbContext.OnModelCreating
-modelBuilder.UseQuartzSqlServer();              // dbo schema
-modelBuilder.UseQuartzSqlServer("scheduler");   // explicit schema
+modelBuilder.UseSchedulerSqlServer();              // dbo schema
+modelBuilder.UseSchedulerSqlServer("scheduler");   // explicit schema
 ```
 
 ### MySQL / MariaDB — `SW.Scheduler.MySql`
@@ -492,7 +492,7 @@ services.AddMySqlScheduler(
 );
 
 // AppDbContext.OnModelCreating
-modelBuilder.UseQuartzMySql();
+modelBuilder.UseSchedulerMySql();
 ```
 
 ### In-Memory — `SW.Scheduler` (development / tests)
@@ -508,7 +508,7 @@ services.AddScheduler(
 
 ## 📅 Cron Expression Format
 
-Quartz.NET uses 6-field cron: `second minute hour dayOfMonth month dayOfWeek`
+SW.Scheduler uses 6-field cron syntax (powered by [Quartz.NET](https://www.quartz-scheduler.net/)): `second minute hour dayOfMonth month dayOfWeek`
 
 | Expression | Meaning |
 |---|---|

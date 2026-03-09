@@ -1,396 +1,329 @@
-# SW.Scheduler - Complete Implementation Guide
+# SW.Scheduler — Implementation Guide
 
 ## Overview
 
-SW.Scheduler is a wrapper around Quartz.NET that provides a simple, type-safe way to schedule jobs in .NET applications. It supports both declarative scheduling (via attributes) and runtime scheduling (via API).
+SW.Scheduler is a type-safe scheduling library built on [Quartz.NET](https://www.quartz-scheduler.net/). It supports declarative scheduling via attributes and full runtime control via `IScheduleRepository`, with built-in job execution monitoring, retry strategies, and an optional admin UI.
 
-## Architecture
+---
 
-### Job Types
+## Namespace
 
-1. **`IScheduledJob`** - Simple jobs without parameters
-   - Use `[Schedule]` attribute for declarative scheduling
-   - Can be scheduled/rescheduled at runtime via `IScheduleRepository`
-   
-2. **`IScheduledJob<TParam>`** - Parameterized jobs
-   - **Runtime-only scheduling** - no attribute support
-   - Each schedule instance can have different parameters
-   - Parameters must be JSON-serializable
-
-### Core Components
-
-- **`QuartzBackgroundJob`** - Internal wrapper that executes all scheduled jobs
-- **`SchedulerPreparation`** - Background service that:
-  - Registers all jobs as durable jobs in Quartz
-  - Auto-schedules `IScheduledJob` implementations with `[Schedule]` attribute
-- **`JobsDiscovery`** - Discovers and catalogs all job implementations
-- **`IScheduleRepository`** - Runtime API for scheduling, rescheduling, and managing jobs
-
-## Usage
-
-### 1. Simple Job with Declarative Scheduling
+All public types live in **`SW.Scheduler`**:
 
 ```csharp
-using SW.PrimitiveTypes;
-
-[Schedule("0 * * * * ?", 
-    TriggerKey = "count-customers-every-minute", 
-    Description = "Count customers every minute")]
-public class CountCustomersJob : IScheduledJob
-{
-    private readonly AppDbContext _db;
-    
-    public CountCustomersJob(AppDbContext db) => _db = db;
-
-    public async Task Execute()
-    {
-        var total = await _db.Customers.CountAsync();
-        Console.WriteLine($"Total customers: {total}");
-    }
-}
+using SW.Scheduler;
 ```
 
-**Features:**
-- Automatically scheduled on application startup
-- Cron expression: `"0 * * * * ?"` = every minute at second 0
-- Optional `TriggerKey` for runtime management
-- Can be overridden/rescheduled at runtime
+---
 
-### 2. Simple Job with Runtime Scheduling
+## Job Types
 
-```csharp
-public class BackupJob : IScheduledJob
-{
-    public async Task Execute()
-    {
-        // Backup logic
-    }
-}
-
-// Schedule at runtime
-public class BackupController : ControllerBase
-{
-    private readonly IScheduleRepository _scheduler;
-    
-    [HttpPost("schedule-backup")]
-    public async Task<IActionResult> ScheduleBackup(string cronExpression)
-    {
-        var triggerKey = await _scheduler.Schedule<BackupJob>(
-            cronExpression: cronExpression,
-            triggerKey: "daily-backup"
-        );
-        
-        return Ok(new { triggerKey });
-    }
-}
-```
-
-### 3. Parameterized Job (Runtime Only)
-
-```csharp
-public class CustomerEmailParams
-{
-    public string CustomerGroup { get; set; }
-    public string EmailTemplate { get; set; }
-}
-
-public class SendCustomerEmailsJob : IScheduledJob<CustomerEmailParams>
-{
-    private readonly IEmailService _emailService;
-    
-    public SendCustomerEmailsJob(IEmailService emailService)
-    {
-        _emailService = emailService;
-    }
-
-    public async Task Execute(CustomerEmailParams jobParams)
-    {
-        // Send emails to specific customer group
-        await _emailService.SendToGroup(
-            jobParams.CustomerGroup, 
-            jobParams.EmailTemplate
-        );
-    }
-}
-
-// Schedule different instances with different parameters
-public class EmailController : ControllerBase
-{
-    private readonly IScheduleRepository _scheduler;
-    
-    [HttpPost("schedule-vip-emails")]
-    public async Task<IActionResult> ScheduleVipEmails()
-    {
-        var triggerKey = await _scheduler.Schedule<SendCustomerEmailsJob, CustomerEmailParams>(
-            param: new CustomerEmailParams 
-            { 
-                CustomerGroup = "VIP", 
-                EmailTemplate = "VipNewsletter" 
-            },
-            cronExpression: "0 0 9 * * ?", // Daily at 9 AM
-            triggerKey: "vip-newsletter-daily"
-        );
-        
-        return Ok(new { triggerKey });
-    }
-    
-    [HttpPost("schedule-regular-emails")]
-    public async Task<IActionResult> ScheduleRegularEmails()
-    {
-        var triggerKey = await _scheduler.Schedule<SendCustomerEmailsJob, CustomerEmailParams>(
-            param: new CustomerEmailParams 
-            { 
-                CustomerGroup = "Regular", 
-                EmailTemplate = "RegularNewsletter" 
-            },
-            cronExpression: "0 0 10 * * ?", // Daily at 10 AM
-            triggerKey: "regular-newsletter-daily"
-        );
-        
-        return Ok(new { triggerKey });
-    }
-}
-```
-
-## IScheduleRepository API
-
-### Schedule with Cron Expression
-
-```csharp
-// Simple job
-Task<string> Schedule<TScheduler>(
-    string cronExpression, 
-    string? triggerKey = null
-) where TScheduler : IScheduledJob;
-
-// Parameterized job
-Task<string> Schedule<TScheduler, TParam>(
-    TParam param, 
-    string cronExpression, 
-    string? triggerKey = null
-) where TScheduler : IScheduledJob<TParam>;
-```
-
-### One-Time Execution
-
-```csharp
-// Simple job - run once
-Task<string> ScheduleOnce<TScheduler>(
-    DateTime? runAt = null, 
-    string? triggerKey = null
-) where TScheduler : IScheduledJob;
-
-// Parameterized job - run once
-Task<string> ScheduleOnce<TScheduler, TParam>(
-    TParam param, 
-    DateTime? runAt = null, 
-    string? triggerKey = null
-) where TScheduler : IScheduledJob<TParam>;
-```
-
-### Job Management
-
-```csharp
-// Reschedule with new cron expression
-Task RescheduleJob(string triggerKey, string newCronExpression);
-
-// Remove scheduled job
-Task UnscheduleJob(string triggerKey);
-
-// Pause job execution
-Task PauseJob(string triggerKey);
-
-// Resume paused job
-Task ResumeJob(string triggerKey);
-
-// Trigger immediately (doesn't create a schedule)
-Task TriggerJobNow<TScheduler>() where TScheduler : IScheduledJob;
-Task TriggerJobNow<TScheduler, TParam>(TParam param) 
-    where TScheduler : IScheduledJob<TParam>;
-
-// Get all registered jobs
-IEnumerable<IScheduledJobDefinition> GetJobDefinitions();
-```
-
-## Cron Expression Examples
-
-```
-"0 * * * * ?"       = Every minute at second 0
-"0 0 * * * ?"       = Every hour at minute 0
-"0 0 9 * * ?"       = Every day at 9:00 AM
-"0 0 9 * * MON-FRI" = Weekdays at 9:00 AM
-"0 */15 * * * ?"    = Every 15 minutes
-"0 0 0 1 * ?"       = First day of every month at midnight
-```
-
-## Setup
-
-### 1. Install Package (when published)
-
-```bash
-dotnet add package SW.Scheduler
-```
-
-### 2. Register Scheduler in Program.cs
+### `IScheduledJob` — simple job, no parameters
 
 ```csharp
 using SW.Scheduler;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Register scheduler with assemblies to scan
-builder.Services.AddScheduler(
-    typeof(Program).Assembly  // Scans for jobs in current assembly
-);
-
-// Configure Quartz with database persistence (optional)
-builder.Services.AddQuartz(q =>
+[Schedule("0 0 8 * * ?", Description = "Daily report at 8 AM")]
+[RetryConfig(MaxRetries = 3, RetryAfterMinutes = 5)]
+[ScheduleConfig(AllowConcurrentExecution = false)]
+public class DailyReportJob : IScheduledJob
 {
-    q.UsePersistentStore(store =>
-    {
-        store.UsePostgres(connectionString);
-        store.UseJsonSerializer();
-    });
-});
+    private readonly ILogger<DailyReportJob> _logger;
 
-var app = builder.Build();
-app.Run();
-```
-
-## Best Practices
-
-### 1. Job Design
-- Keep jobs lightweight and focused
-- Use dependency injection for services
-- Handle errors gracefully inside Execute method
-- Use logging to track execution
-
-### 2. Scheduling Strategy
-- Use `[Schedule]` for predictable, startup-defined schedules
-- Use runtime API for dynamic, user-configured schedules
-- Use meaningful `triggerKey` values for management
-
-### 3. Parameters
-- Keep parameter objects simple and serializable
-- Avoid complex object graphs
-- Document expected parameter structure
-
-### 4. Error Handling
-
-```csharp
-public class RobustJob : IScheduledJob
-{
-    private readonly ILogger<RobustJob> _logger;
-    
-    public RobustJob(ILogger<RobustJob> logger) => _logger = logger;
+    public DailyReportJob(ILogger<DailyReportJob> logger) => _logger = logger;
 
     public async Task Execute()
     {
-        try
-        {
-            // Job logic
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Job execution failed");
-            // Optionally rethrow to trigger Quartz retry logic
-            throw;
-        }
+        _logger.LogInformation("Running daily report...");
+        await Task.CompletedTask;
     }
 }
 ```
 
-## Advanced: Overriding Declarative Schedules
+- Scheduled automatically on startup via `[Schedule]`.
+- Supports only **one** active cron trigger at a time.
+- The schedule can be overridden at runtime via `IScheduleRepository.Schedule<TJob>()`.
+
+### `IScheduledJob<TParam>` — parameterized job
 
 ```csharp
-// Job defined with default schedule
-[Schedule("0 0 * * * ?", TriggerKey = "default-report")]
-public class ReportJob : IScheduledJob
-{
-    public Task Execute() { /* ... */ }
-}
+using SW.Scheduler;
 
-// Override at runtime
-public async Task ChangeSchedule(IScheduleRepository scheduler)
+public record EmailParams(string Group, string Template);
+
+[ScheduleConfig(AllowConcurrentExecution = true)]
+[RetryConfig(MaxRetries = 5, RetryAfterMinutes = 10)]
+public class SendEmailsJob : IScheduledJob<EmailParams>
 {
-    // Unschedule the default trigger
-    await scheduler.UnscheduleJob("default-report");
-    
-    // Create new schedule
-    await scheduler.Schedule<ReportJob>(
-        cronExpression: "0 0 0 * * ?",  // Change to midnight
-        triggerKey: "custom-report"
-    );
+    public async Task Execute(EmailParams p)
+    {
+        Console.WriteLine($"Sending '{p.Template}' to group '{p.Group}'");
+        await Task.CompletedTask;
+    }
 }
 ```
 
-## Implementation Details
+- **No** `[Schedule]` attribute — always scheduled at runtime.
+- Each `scheduleKey` gets its own dedicated scheduler entry, enabling multiple concurrent configurations with different parameters.
 
-### Job Identity
-- Each job is registered as a **durable job** in Quartz
-- Identity: `JobKey(JobType.Name, JobType.Namespace)`
-- Multiple triggers can reference the same job
+---
 
-### Parameter Serialization
-- Parameters are serialized to JSON using `System.Text.Json`
-- Stored in trigger's `JobDataMap` with key `"JobParams"`
-- Deserialized before passing to `Execute(TParam)` method
+## Attributes
 
-### Concurrency
-- All jobs use `[DisallowConcurrentExecution]`
-- Same job won't run concurrently even with multiple triggers
-- Use different job classes if you need parallel execution
+| Attribute | Applies to | Purpose |
+|---|---|---|
+| `[Schedule(cron)]` | `IScheduledJob` only | Declarative startup scheduling |
+| `[ScheduleConfig(...)]` | Both | Concurrency, recovery, misfire behaviour |
+| `[RetryConfig(...)]` | Both | Self-rescheduling retry on exception |
 
-### Persistence
-- Jobs and triggers are persisted if Quartz is configured with database
-- Survives application restarts
-- Declarative schedules (via `[Schedule]`) are recreated on startup if missing
+### `[ScheduleConfig]`
 
-## Troubleshooting
-
-### Job Not Executing
-1. Check if job is registered: `_scheduler.GetJobDefinitions()`
-2. Verify cron expression is valid
-3. Check application logs for errors
-4. Ensure job's dependencies are registered in DI
-
-### Parameter Not Received
-1. Verify parameter type is serializable
-2. Check parameter is not null when scheduling
-3. Ensure `TParam` matches the job's generic parameter
-
-### Trigger Already Exists
-- Use unique trigger keys
-- Or unschedule existing trigger first
-- Or use `RescheduleJob` to update existing trigger
-
-## Migration from Old Approach
-
-If you had jobs with `DefaultSchedule()` method:
-
-**Before:**
 ```csharp
-public class MyJob : IScheduledJob
+[ScheduleConfig(
+    AllowConcurrentExecution = false,   // default: false
+    RequestsRecovery = true,            // default: true — re-run after crash
+    MisfireInstructions = MisfireInstructions.FireOnce  // default
+)]
+```
+
+### `[RetryConfig]`
+
+When a job throws an exception, the scheduler:
+1. Catches the exception and saves it to the job's data map.
+2. Increments a persistent `RetryCount`.
+3. If `RetryCount < MaxRetries`, schedules a one-time trigger at `now + RetryAfterMinutes`.
+4. Lets the current execution finish cleanly (no error state).
+
+```csharp
+[RetryConfig(MaxRetries = 3, RetryAfterMinutes = 5)]
+```
+
+---
+
+## IScheduleRepository
+
+Inject `IScheduleRepository` anywhere in your application to manage schedules at runtime.
+
+### Simple job — Schedule
+
+```csharp
+// Create or replace the default trigger
+await scheduler.Schedule<DailyReportJob>("0 0 8 * * ?");
+
+// With runtime config override
+await scheduler.Schedule<DailyReportJob>("0 0 8 * * ?", new ScheduleConfig
 {
-    public string DefaultSchedule() => "0 * * * * ?";
-    public Task Execute() { /* ... */ }
+    EnableRetry = true,
+    MaxRetries = 5,
+    RetryAfterMinutes = 10
+});
+```
+
+### Simple job — ScheduleOnce
+
+```csharp
+// Run immediately
+await scheduler.ScheduleOnce<DailyReportJob>();
+
+// Run at a specific UTC time
+await scheduler.ScheduleOnce<DailyReportJob>(runAt: DateTime.UtcNow.AddHours(1));
+```
+
+### Parameterized job — Schedule
+
+```csharp
+// Create a named recurring schedule
+await scheduler.Schedule<SendEmailsJob, EmailParams>(
+    param: new EmailParams("VIP", "VipNewsletter"),
+    cronExpression: "0 0 9 * * ?",   // daily at 9 AM
+    scheduleKey: "vip-emails-daily"
+);
+
+// A second independent schedule for a different group
+await scheduler.Schedule<SendEmailsJob, EmailParams>(
+    param: new EmailParams("Regular", "RegularNewsletter"),
+    cronExpression: "0 0 10 * * ?",
+    scheduleKey: "regular-emails-daily"
+);
+```
+
+### Parameterized job — ScheduleOnce
+
+```csharp
+// Returns the auto-generated schedule key
+string key = await scheduler.ScheduleOnce<SendEmailsJob, EmailParams>(
+    param: new EmailParams("Trial", "WelcomeEmail")
+);
+```
+
+### Reschedule
+
+```csharp
+// Simple job — replace its cron expression
+await scheduler.RescheduleJob<DailyReportJob>("0 0 6 * * ?");
+
+// Parameterized — update a named schedule
+await scheduler.RescheduleJob<SendEmailsJob, EmailParams>("vip-emails-daily", "0 0 7 * * ?");
+```
+
+### Pause / Resume
+
+```csharp
+// Simple job
+await scheduler.PauseJob<DailyReportJob>();
+await scheduler.ResumeJob<DailyReportJob>();
+
+// Parameterized — by schedule key
+await scheduler.PauseJob<SendEmailsJob, EmailParams>("vip-emails-daily");
+await scheduler.ResumeJob<SendEmailsJob, EmailParams>("vip-emails-daily");
+```
+
+### Unschedule
+
+```csharp
+// Simple job — removes the trigger, keeps the durable job registration
+await scheduler.UnscheduleJob<DailyReportJob>();
+
+// Parameterized — removes the dedicated job entry entirely
+await scheduler.UnscheduleJob<SendEmailsJob, EmailParams>("vip-emails-daily");
+```
+
+### Discovery
+
+```csharp
+IEnumerable<IScheduledJobDefinition> defs = scheduler.GetJobDefinitions();
+foreach (var def in defs)
+    Console.WriteLine($"{def.Name} ({def.Group})");
+```
+
+---
+
+## ScheduleConfig (runtime override)
+
+`ScheduleConfig` can be passed to any `Schedule*` call to override the job's attribute-based defaults:
+
+```csharp
+var config = new ScheduleConfig
+{
+    AllowConcurrentExecution = true,
+    RequestsRecovery         = false,
+    MisfireInstructions      = MisfireInstructions.Skip,
+    EnableRetry              = true,
+    MaxRetries               = 5,
+    RetryAfterMinutes        = 15
+};
+
+await scheduler.Schedule<DailyReportJob>("0 0 8 * * ?", config);
+```
+
+---
+
+## Cron Expression Format
+
+SW.Scheduler uses 6-field cron syntax (powered by Quartz.NET):
+
+```
+second  minute  hour  dayOfMonth  month  dayOfWeek
+```
+
+| Expression | Meaning |
+|---|---|
+| `0 * * * * ?` | Every minute |
+| `0 0 * * * ?` | Every hour |
+| `0 0 8 * * ?` | Daily at 08:00 |
+| `0 0 8 * * MON-FRI` | Weekdays at 08:00 |
+| `0 */15 * * * ?` | Every 15 minutes |
+| `0 0 0 1 * ?` | First day of every month at midnight |
+
+---
+
+## Job Identity Convention
+
+Job keys are derived from the job type automatically:
+
+- **Group** = last two namespace segments + class name
+  e.g. `SampleApplication.Jobs.SendEmailsJob` → group `Jobs.SendEmailsJob`
+- **Name (simple job)** = `"MAIN"`
+- **Name (parameterized)** = the `scheduleKey` you provide
+
+---
+
+## Monitoring
+
+When `AddSchedulerMonitoring<TDbContext>()` is called, every execution is automatically recorded in a `job_executions` table:
+
+```csharp
+// Inject IScheduleReader for dashboard queries
+public class DashboardService(IScheduleReader reader)
+{
+    public Task<JobExecution?> LastRun()
+        => reader.GetLastExecution<DailyReportJob>();
+
+    public Task<IReadOnlyList<JobExecution>> Recent()
+        => reader.GetRecentExecutions<DailyReportJob>(limit: 10);
+
+    public Task<IReadOnlyList<JobExecution>> Failures()
+        => reader.GetFailedExecutions<DailyReportJob>(since: DateTime.UtcNow.AddDays(-7));
+
+    public Task<IReadOnlyList<JobExecution>> Running()
+        => reader.GetRunningExecutions();
 }
 ```
 
-**After:**
+---
+
+## Setup Summary
+
 ```csharp
-[Schedule("0 * * * * ?")]
-public class MyJob : IScheduledJob
+// Program.cs
+using SW.Scheduler;
+using SW.Scheduler.PgSql;  // or SqlServer / MySql
+
+// 1. Register the scheduler (provider package does it all)
+builder.Services.AddPgSqlScheduler(
+    connectionString: builder.Configuration.GetConnectionString("Postgres")!,
+    schema: "quartz",
+    configureOptions: o =>
+    {
+        o.SystemUserIdentifier = "scheduler";
+        o.RetentionDays        = 30;
+        o.EnableArchive        = false;
+    },
+    assemblies: typeof(Program).Assembly
+);
+
+// 2. Register EF Core monitoring (optional)
+builder.Services.AddSchedulerMonitoring<AppDbContext>();
+
+// 3. Register admin UI (optional)
+builder.Services.AddSchedulerViewer(o =>
 {
-    public Task Execute() { /* ... */ }
-}
+    o.PathPrefix    = "/scheduler";
+    o.AuthorizeAsync = ctx => Task.FromResult(ctx.User.Identity?.IsAuthenticated == true);
+});
+
+var app = builder.Build();
+
+app.UseSchedulerViewer();
+app.MapSchedulerViewer();
+
+app.Run();
 ```
 
-## Summary
+```csharp
+// AppDbContext.OnModelCreating
+modelBuilder.UseSchedulerPostgreSql("quartz");
+// or: modelBuilder.UseSchedulerSqlServer()
+// or: modelBuilder.UseSchedulerMySql()
+```
 
-✅ **IScheduledJob** → Use `[Schedule]` attribute + runtime API  
-✅ **IScheduledJob<TParam>** → Runtime API only  
-✅ Type-safe scheduling with compile-time checks  
-✅ Flexible: declarative OR runtime OR both  
-✅ Full job lifecycle management  
-✅ Works with any Quartz persistence backend  
+---
+
+## Best Practices
+
+- **Keep jobs focused** — one responsibility per job class.
+- **Use `[Schedule]` for system-defined schedules** — things that always run regardless of user configuration.
+- **Use runtime scheduling for user-driven schedules** — dynamic cron expressions, different parameter values.
+- **Use `[RetryConfig]`** for jobs that depend on external services that may be temporarily unavailable.
+- **Avoid shared mutable state** — each job execution gets its own DI scope.
+- **Log liberally inside `Execute()`** — the monitoring layer captures success/failure but not internal steps.

@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 using SW.Scheduler.Monitoring;
 
 namespace SW.Scheduler.EfCore;

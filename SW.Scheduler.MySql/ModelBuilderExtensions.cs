@@ -5,25 +5,25 @@ using SW.Scheduler.EfCore.EntityTypeConfigurations;
 namespace SW.Scheduler.MySql;
 
 /// <summary>
-/// Extension for configuring Quartz + JobExecution tables in a MySQL/MariaDB DbContext.
+/// Extension for including scheduler tables in a MySQL/MariaDB DbContext.
 /// Delegates to the shared entity type configurations in SW.Scheduler.EfCore
 /// using <see cref="QuartzColumnTypes.MySql"/> column types.
 /// </summary>
 public static class ModelBuilderExtensions
 {
     /// <summary>
-    /// Adds Quartz.NET scheduler tables and the <c>job_executions</c> monitoring table
+    /// Adds scheduler tables and the <c>job_executions</c> monitoring table
     /// to your DbContext for MySQL/MariaDB.
     ///
     /// Call this in <c>OnModelCreating</c>:
     /// <code>
-    /// modelBuilder.UseQuartzMySql()               // default QRTZ_ prefix, no schema
-    /// modelBuilder.UseQuartzMySql("QRTZ_")        // explicit prefix
+    /// modelBuilder.UseSchedulerMySql()          // default prefix
+    /// modelBuilder.UseSchedulerMySql("QRTZ_")   // explicit prefix
     /// </code>
     /// </summary>
     /// <param name="modelBuilder">The ModelBuilder instance.</param>
-    /// <param name="tablePrefix">Table prefix for Quartz tables (default: "QRTZ_").</param>
-    public static ModelBuilder UseQuartzMySql(
+    /// <param name="tablePrefix">Table prefix for scheduler tables (default: "QRTZ_").</param>
+    public static ModelBuilder UseSchedulerMySql(
         this ModelBuilder modelBuilder,
         string tablePrefix = "QRTZ_")
     {

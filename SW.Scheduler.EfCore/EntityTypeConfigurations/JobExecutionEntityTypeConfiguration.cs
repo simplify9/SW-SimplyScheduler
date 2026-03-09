@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SW.Scheduler.EfCore.EntityTypeConfigurations;
 

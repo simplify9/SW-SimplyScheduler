@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Defines what happens when a trigger misfires (i.e. its scheduled time was missed).

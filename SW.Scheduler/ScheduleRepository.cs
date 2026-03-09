@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Quartz;
-using SW.PrimitiveTypes;
+using SW.PrimitiveTypes; // SWValidationException from SimplyWorks.PrimitiveTypes
 
 namespace SW.Scheduler;
 
@@ -68,8 +68,8 @@ internal static class ScheduleConfigExtensions
 
         if (config.EnableRetry)
             builder = builder
-                .UsingJobData(Constants.RetryMaxKey,          config.MaxRetries)
-                .UsingJobData(Constants.RetryAfterMinutesKey, config.RetryAfterMinutes);
+                .UsingJobData(Constants.RetryMaxKey,          config.MaxRetries.ToString())
+                .UsingJobData(Constants.RetryAfterMinutesKey, config.RetryAfterMinutes.ToString());
 
         return builder;
     }

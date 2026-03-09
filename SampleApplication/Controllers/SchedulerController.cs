@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SampleApplication.Jobs;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SampleApplication.Controllers;
 

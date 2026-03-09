@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SW.Scheduler.Monitoring;
 

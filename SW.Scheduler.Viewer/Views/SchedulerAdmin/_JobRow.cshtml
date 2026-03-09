@@ -38,7 +38,20 @@
     </td>
     <td><span class="mono" style="font-size:.78rem;opacity:.7">@job.Group</span></td>
     <td><span class="badge @stateClass">@stateBadge</span></td>
-    <td class="mono">@(job.CronExpression ?? "—")</td>
+    <td>
+        @if (job.CronExpression != null)
+        {
+            string cronDesc;
+            try { cronDesc = ExpressionDescriptor.GetDescription(job.CronExpression); }
+            catch { cronDesc = job.CronExpression; }
+            <span title="@job.CronExpression">@cronDesc</span>
+            <br/><small class="mono" style="opacity:.55;font-size:.72rem">@job.CronExpression</small>
+        }
+        else
+        {
+            <span class="mono">—</span>
+        }
+    </td>
     <td class="mono">@(job.NextFireTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</td>
     <td class="mono">@(job.PreviousFireTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</td>
     <td>
@@ -78,6 +91,9 @@
                 <input type="hidden" name="name"  value="@job.Name"/>
                 <button type="submit" class="btn-danger">🗑 Unschedule</button>
             </form>
+
+            <a href="@basePath/History?jobGroup=@Uri.EscapeDataString(job.Group)"
+               class="btn-history">📋 History</a>
         </div>
 
         @* Inline reschedule form — only shown when there is a trigger to replace *@

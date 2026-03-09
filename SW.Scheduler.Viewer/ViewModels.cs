@@ -1,4 +1,4 @@
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SW.Scheduler.Viewer;
 

@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SW.Scheduler.EfCore;
 

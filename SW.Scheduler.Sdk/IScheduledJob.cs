@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>Marker base interface for all scheduled job types.</summary>
 public interface IScheduledJobBase

@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Exposes metadata about a discovered scheduled job, used by the scheduler at startup and runtime.

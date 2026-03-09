@@ -1,5 +1,4 @@
 using Quartz;
-using SW.PrimitiveTypes;
 
 namespace SW.Scheduler;
 
@@ -16,12 +15,12 @@ public static class Extensions
     {
         var exists = await scheduler.CheckExists(triggerKey);
         if (exists)
-            throw new SWValidationException("TriggerAlreadyExists", "Trigger already exists");
+            throw new InvalidOperationException($"A trigger with key '{triggerKey}' already exists.");
     }
 
     internal static void ValidateCronExpression(this string cronExpression)
     {
         if (!CronExpression.IsValidExpression(cronExpression))
-            throw new SWValidationException("InvalidCronExpression", "Invalid cron expression");
+            throw new ArgumentException($"Invalid cron expression: '{cronExpression}'", nameof(cronExpression));
     }
 }
