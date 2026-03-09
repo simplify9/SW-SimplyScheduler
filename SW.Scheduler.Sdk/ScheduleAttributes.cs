@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Declaratively schedules an <see cref="IScheduledJob"/> on application startup using a cron expression.
@@ -16,12 +16,12 @@ public class ScheduleAttribute : Attribute
 {
     /// <summary>
     /// Cron expression defining when the job should run.
-    /// Uses Quartz.NET cron format (6 or 7 fields).
+    /// Uses 6-field cron format: <c>second minute hour dayOfMonth month dayOfWeek</c>.
     /// <example><c>"0 0 * * * ?"</c> — every hour on the hour.</example>
     /// </summary>
     public string CronExpression { get; }
 
-    /// <summary>Optional human-readable description stored on the Quartz trigger.</summary>
+    /// <summary>Optional human-readable description stored alongside the trigger.</summary>
     public string? Description { get; set; }
 
     /// <param name="cronExpression">A valid Quartz.NET cron expression.</param>
@@ -36,10 +36,10 @@ public class ScheduleAttribute : Attribute
 /// When a job execution throws an exception the scheduler will catch it, increment a
 /// persistent retry counter in the job's data map, and schedule a new one-time trigger
 /// at <c>now + <see cref="RetryAfterMinutes"/></c> — up to <see cref="MaxRetries"/> times.
-/// The current execution always finishes cleanly so Quartz does not mark it as failed.
+/// The current execution always finishes cleanly so the scheduler does not mark it as failed.
 /// <para>
 /// Applicable to both <see cref="IScheduledJob"/> and <see cref="IScheduledJob{TParam}"/> implementations.
-/// At runtime, retry behaviour can be overridden via <see cref="ScheduleConfig.Retry"/>.
+/// At runtime, retry behaviour can be overridden via <see cref="ScheduleConfig.EnableRetry"/>.
 /// </para>
 /// </summary>
 /// <example>
@@ -64,8 +64,9 @@ public class RetryConfigAttribute : Attribute
     public double RetryAfterMinutes { get; set; } = 5;
 }
 
-/// Controls concurrency, crash-recovery, and misfire handling.
-/// When omitted, defaults apply: no concurrency, recovery enabled, misfire fires once.
+/// <summary>
+/// Controls concurrency, crash-recovery, and misfire handling for a scheduled job.
+/// When omitted, defaults apply: no concurrent execution, recovery enabled, misfire fires once.
 /// <para>
 /// Applicable to both <see cref="IScheduledJob"/> and <see cref="IScheduledJob{TParam}"/> implementations.
 /// At runtime, these defaults can be overridden per-schedule via <see cref="ScheduleConfig"/>.
@@ -87,7 +88,7 @@ public class ScheduleConfigAttribute : Attribute
     public bool AllowConcurrentExecution { get; set; } = false;
 
     /// <summary>
-    /// Whether Quartz should attempt to re-execute this job after a scheduler crash or restart.
+    /// Whether the scheduler should attempt to re-execute this job after a crash or restart.
     /// Default: <c>true</c>.
     /// </summary>
     public bool RequestsRecovery { get; set; } = true;
@@ -98,4 +99,3 @@ public class ScheduleConfigAttribute : Attribute
     /// </summary>
     public MisfireInstructions MisfireInstructions { get; set; } = MisfireInstructions.FireOnce;
 }
-

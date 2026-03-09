@@ -4,7 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
-using SW.PrimitiveTypes;
+using SW.PrimitiveTypes; // RequestContext from SimplyWorks.PrimitiveTypes
 
 namespace SW.Scheduler;
 
@@ -116,8 +116,8 @@ internal static class QuartzJobExecutor
         currentRetry++;
 
         // Persist the updated state into the data map (PersistJobDataAfterExecution ensures this is saved).
-        dataMap[Constants.RetryCountKey] = currentRetry;
-        dataMap[Constants.LastErrorKey] = $"[Attempt {currentRetry}] {ex.GetType().Name}: {ex.Message}";
+        dataMap[Constants.RetryCountKey] = currentRetry.ToString();
+        dataMap[Constants.LastErrorKey]  = $"[Attempt {currentRetry}] {ex.GetType().Name}: {ex.Message}";
 
         if (currentRetry <= maxRetries)
         {

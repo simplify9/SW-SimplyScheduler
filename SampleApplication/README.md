@@ -327,7 +327,7 @@ And update `AppDbContext.OnModelCreating`:
 modelBuilder.ApplyScheduling();
 
 // After:
-modelBuilder.UseQuartzPostgreSql("quartz");
+modelBuilder.UseSchedulerPostgreSql("quartz");
 ```
 
 Then run migrations:
@@ -337,5 +337,5 @@ dotnet ef migrations add AddScheduler
 dotnet ef database update
 ```
 
-The same pattern applies for SQL Server (`UseQuartzSqlServer`) and MySQL (`UseQuartzMySql`).
+The same pattern applies for SQL Server (`UseSchedulerSqlServer`) and MySQL (`UseSchedulerMySql`).
 

@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Non-generic command service used by the Scheduler Admin UI (SW.Scheduler.Viewer).

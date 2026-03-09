@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Options for the SW.Scheduler library. Pass to <c>AddScheduler(options => ...)</c>.
@@ -32,8 +32,8 @@ public class SchedulerOptions
     // ── Cloud archiving ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// When <c>true</c>, each completed execution is serialised to JSON and uploaded to
-    /// <c>SW.PrimitiveTypes.ICloudFilesService</c> under:
+    /// When <c>true</c>, each completed execution is serialised to JSON and uploaded via
+    /// <c>ICloudFilesService</c> (from <c>SimplyWorks.PrimitiveTypes</c>) under:
     /// <c>{CloudFilesPrefix}job-history/{JobGroup}/{yyyy}/{MM}/{dd}/{FireInstanceId}.json</c>.
     /// Default: <c>false</c>.
     /// </summary>

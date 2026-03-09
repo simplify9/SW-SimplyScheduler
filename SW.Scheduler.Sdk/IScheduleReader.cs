@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Provides read-only dashboard queries over the job execution history stored in the RDBMS.

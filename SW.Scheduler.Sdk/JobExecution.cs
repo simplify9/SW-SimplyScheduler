@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Holds contextual information captured at the moment a job execution fires.

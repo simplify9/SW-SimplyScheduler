@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Runtime configuration for a specific job schedule.
@@ -14,7 +14,7 @@ public class ScheduleConfig
     public bool AllowConcurrentExecution { get; set; } = false;
 
     /// <summary>
-    /// Whether Quartz should attempt to re-execute the job after a scheduler crash or restart.
+    /// Whether the scheduler should attempt to re-execute the job after a crash or restart.
     /// Default: <c>true</c>.
     /// </summary>
     public bool RequestsRecovery { get; set; } = true;
@@ -36,7 +36,7 @@ public class ScheduleConfig
     ///   <item>Catch the exception and save the error details to the job's data map.</item>
     ///   <item>Increment a persistent <c>RetryCount</c> in the job's data map.</item>
     ///   <item>If <c>RetryCount &lt; MaxRetries</c>, create a new one-time trigger at <c>now + RetryAfterMinutes</c>.</item>
-    ///   <item>Let the current execution finish normally (no Quartz error state).</item>
+    ///   <item>Let the current execution finish cleanly (no error state).</item>
     /// </list>
     /// Once <c>MaxRetries</c> is exhausted the failure is logged and no further retry is scheduled.
     /// Default: <c>false</c>.

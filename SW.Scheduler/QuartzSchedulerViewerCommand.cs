@@ -1,5 +1,4 @@
 using Quartz;
-using SW.PrimitiveTypes;
 
 namespace SW.Scheduler;
 

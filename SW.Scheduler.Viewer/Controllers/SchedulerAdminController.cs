@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 using SW.Scheduler.Viewer;
 
 namespace SW.Scheduler.Viewer.Controllers;

@@ -1,5 +1,5 @@
 #nullable enable
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SW.Scheduler.Monitoring;
 

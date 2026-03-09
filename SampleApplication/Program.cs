@@ -1,11 +1,22 @@
 using Microsoft.EntityFrameworkCore;
 using SW.Scheduler;
 using SW.Scheduler.EfCore;
+using SW.Scheduler.PgSql;
 using SW.Scheduler.Viewer;
 using SampleApplication.Data;
 using SampleApplication;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var cfg = builder.Configuration;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Read scheduler config
+// Scheduler:UseDatabase = false  → in-memory Quartz + InMemory EF (default)
+// Scheduler:UseDatabase = true   → PostgreSQL Quartz + Npgsql EF
+// ─────────────────────────────────────────────────────────────────────────────
+var useDatabase = cfg.GetValue<bool>("Scheduler:UseDatabase");
+var schema      = cfg.GetValue<string>("Scheduler:Schema") ?? "quartz";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Infrastructure
@@ -19,83 +30,69 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EF Core — InMemory for the sample (swap for a real provider in production)
+// EF Core
 // ─────────────────────────────────────────────────────────────────────────────
-builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseInMemoryDatabase("SampleAppDb"));
+if (useDatabase)
+{
+    var connStr = cfg.GetConnectionString("Postgres")
+        ?? throw new InvalidOperationException(
+            "ConnectionStrings:Postgres is required when Scheduler:UseDatabase = true");
+
+    builder.Services.AddDbContext<AppDbContext>(opt =>
+        opt.UseNpgsql(connStr));
+}
+else
+{
+    builder.Services.AddDbContext<AppDbContext>(opt =>
+        opt.UseInMemoryDatabase("SampleAppDb"));
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scheduler
-//
-// OPTION A (used here): In-memory Quartz store — great for development/testing.
-//   Jobs are lost on restart. No migrations needed.
-//
-// OPTION B: PostgreSQL persistent store — recommended for production.
-//   Replace the block below with:
-//
-//     builder.Services.AddPgSqlScheduler(
-//         connectionString: builder.Configuration.GetConnectionString("Postgres")!,
-//         schema: "quartz",
-//         configureOptions: options => { /* same options as below */ },
-//         assemblies: typeof(Program).Assembly);
-//
-//   And in AppDbContext.OnModelCreating:
-//     modelBuilder.UseQuartzPostgreSql("quartz");
-//
-// OPTION C: SQL Server
-//     builder.Services.AddSqlServerScheduler(
-//         connectionString: builder.Configuration.GetConnectionString("SqlServer")!,
-//         assemblies: typeof(Program).Assembly);
-//     modelBuilder.UseQuartzSqlServer();
-//
-// OPTION D: MySQL / MariaDB
-//     builder.Services.AddMySqlScheduler(
-//         connectionString: builder.Configuration.GetConnectionString("MySql")!,
-//         assemblies: typeof(Program).Assembly);
-//     modelBuilder.UseQuartzMySql();
+// Scheduler options — shared regardless of provider
 // ─────────────────────────────────────────────────────────────────────────────
-builder.Services.AddScheduler(
-    configureOptions: options =>
-    {
-        // Identity used as the RequestContext user during job execution.
-        options.SystemUserIdentifier  = "sample-scheduler";
+void ConfigureSchedulerOptions(SchedulerOptions options)
+{
+    options.SystemUserIdentifier  = cfg.GetValue<string>("Scheduler:SystemUserIdentifier")  ?? "sample-scheduler";
+    options.RetentionDays         = cfg.GetValue<int>("Scheduler:RetentionDays",         30);
+    options.CleanupCronExpression = cfg.GetValue<string>("Scheduler:CleanupCronExpression") ?? "0 0 2 * * ?";
+    options.EnableArchive         = cfg.GetValue<bool>("Scheduler:EnableArchive",         false);
+    options.CloudFilesPrefix      = cfg.GetValue<string>("Scheduler:CloudFilesPrefix")     ?? "sample-app/";
+}
 
-        // Execution history: keep records for 30 days, clean up daily at 2 AM.
-        options.RetentionDays         = 30;
-        options.CleanupCronExpression = "0 0 2 * * ?";
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduler — in-memory or PostgreSQL
+// ─────────────────────────────────────────────────────────────────────────────
+if (useDatabase)
+{
+    var connStr = cfg.GetConnectionString("Postgres")!;
 
-        // Cloud archiving: set EnableArchive = true and register ICloudFilesService
-        // to upload execution JSON to S3/Azure/GCS after each job completes.
-        options.EnableArchive         = false;
-        options.CloudFilesPrefix      = "sample-app/";
-    },
-    assemblies: typeof(Program).Assembly   // scan this assembly for IScheduledJob implementations
-);
+    builder.Services.AddPgSqlScheduler(
+        connectionString: connStr,
+        schema: schema,
+        configureOptions: ConfigureSchedulerOptions,
+        assemblies: typeof(Program).Assembly);
+}
+else
+{
+    // In-memory Quartz store — no migrations, no persistence across restarts.
+    builder.Services.AddScheduler(
+        configureOptions: ConfigureSchedulerOptions,
+        assemblies: typeof(Program).Assembly);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Job execution monitoring
-//
-// Wires IJobExecutionStore → AppDbContext so every execution is recorded in
-// the job_executions table. Requires AppDbContext.OnModelCreating to call
-// modelBuilder.ApplyScheduling() (or the provider-specific equivalent).
 // ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddSchedulerMonitoring<AppDbContext>();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scheduler Admin UI (SW.Scheduler.Viewer)
-//
-// Mounts an HTMX-based dashboard at /scheduler-management.
-// Requires AddSchedulerMonitoring to be called first so ISchedulerViewerQuery
-// is available to the viewer's controller.
+// Scheduler Admin UI
 // ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddSchedulerViewer(opts =>
 {
     opts.Title      = "Sample App Scheduler";
     opts.PathPrefix = "/scheduler-management";
-
-    // In production, guard the UI — e.g. role check, API key, etc.
     // opts.AuthorizeAsync = ctx => Task.FromResult(ctx.User.IsInRole("Admin"));
-    // For the sample we leave it open (no auth guard).
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,10 +112,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthorization();
 
-// ── Scheduler Admin UI ────────────────────────────────────────────────────
-// Must be called after UseRouting (implicit in WebApplication) and before MapControllers.
-app.UseSchedulerViewer();   // auth guard middleware
-app.MapSchedulerViewer();   // MVC area routes → /scheduler-management
+app.UseSchedulerViewer();
+app.MapSchedulerViewer();
 
 app.MapControllers();
 
@@ -132,6 +127,11 @@ static async Task SeedAsync(WebApplication app)
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+    // Create the database and schema if they don't exist.
+    // EnsureCreatedAsync works for both InMemory and real providers (PostgreSQL etc.).
+    // It creates tables directly from the model without migrations — suitable for a sample app.
+    await db.Database.EnsureCreatedAsync();
+
     if (await db.Customers.AnyAsync()) return;
 
     db.Customers.AddRange(
@@ -143,3 +143,5 @@ static async Task SeedAsync(WebApplication app)
     );
     await db.SaveChangesAsync();
 }
+
+

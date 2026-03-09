@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 using SW.Scheduler.Monitoring;
 
 namespace SW.Scheduler.EfCore;

@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
-using SW.PrimitiveTypes;
 using SW.Scheduler.Monitoring;
 
 // Grant provider packages access to AddSchedulerCore so they can register

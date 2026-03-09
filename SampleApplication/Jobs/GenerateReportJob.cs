@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SampleApplication.Data;
-using SW.PrimitiveTypes;
+using SW.Scheduler;
 
 namespace SampleApplication.Jobs;
 

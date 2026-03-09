@@ -1,4 +1,4 @@
-namespace SW.PrimitiveTypes;
+namespace SW.Scheduler;
 
 /// <summary>
 /// Provides runtime scheduling and management of jobs.
@@ -13,7 +13,7 @@ public interface IScheduleRepository
 
     /// <summary>
     /// Creates a recurring cron schedule for a parameterized job.
-    /// Each <paramref name="scheduleKey"/> gets its own dedicated Quartz job, so
+    /// Each <paramref name="scheduleKey"/> gets its own dedicated schedule, so
     /// <see cref="ScheduleConfig"/> (e.g. concurrency) is applied independently per schedule.
     /// </summary>
     /// <param name="param">The parameter object serialized into the job's data map.</param>
