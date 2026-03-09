@@ -55,7 +55,7 @@ internal static class QuartzJobExecutor
         var identity = new GenericIdentity(schedulerOptions.SystemUserIdentifier);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, schedulerOptions.SystemUserIdentifier));
         var principal = new ClaimsPrincipal(identity);
-        requestContext.Set(principal, null, Guid.NewGuid().ToString("N"));
+        requestContext?.Set(principal, null, Guid.NewGuid().ToString("N"));
         
         var svc = scope.ServiceProvider.GetService(jobDefinition.JobType);
         if (svc == null)
@@ -169,7 +169,7 @@ internal static class QuartzJobExecutor
                 throw new InvalidOperationException(
                     $"Job '{jobTypeName}' requires parameters but none were found in the job data map.");
 
-            var jobParams = JsonSerializer.Deserialize(value, jobDefinition.JobParamsType);
+            var jobParams = JsonSerializer.Deserialize(value, jobDefinition.JobParamsType!);
             if (jobParams is null)
                 throw new InvalidOperationException(
                     $"Deserialized params for job '{jobTypeName}' resolved to null. Raw value: {value}");
@@ -193,7 +193,7 @@ internal static class QuartzJobExecutor
 
 /// <summary>
 /// Single Quartz IJob wrapper for all scheduled jobs.
-/// Concurrency is controlled per job via <see cref="JobBuilder.DisallowConcurrentExecution()"/>.
+/// Concurrency is controlled per job via <see cref="DisallowConcurrentExecutionAttribute"/>.
 /// Retry logic is handled inside the executor via the self-rescheduling pattern;
 /// this wrapper only surfaces non-retryable failures as <see cref="JobExecutionException"/>.
 /// </summary>

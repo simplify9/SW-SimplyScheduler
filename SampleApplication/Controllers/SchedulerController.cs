@@ -42,7 +42,7 @@ public class SchedulerController : ControllerBase
                 name      = j.Name,
                 group     = j.Group,
                 hasParams = j.WithParams,
-                paramType = j.JobParamsType?.Name,
+                paramType = j.JobParamsType?.Name ?? "none",
                 type      = j.JobType.FullName
             });
         return Ok(jobs);

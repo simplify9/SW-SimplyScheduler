@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SW.Scheduler;
 using SW.Scheduler.EfCore;
+using SW.Scheduler.Viewer;
 using SampleApplication.Data;
 using SampleApplication;
 
@@ -10,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Infrastructure
 // ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
+builder.Services.AddControllersWithViews();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -80,6 +82,23 @@ builder.Services.AddScheduler(
 builder.Services.AddSchedulerMonitoring<AppDbContext>();
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Scheduler Admin UI (SW.Scheduler.Viewer)
+//
+// Mounts an HTMX-based dashboard at /scheduler-management.
+// Requires AddSchedulerMonitoring to be called first so ISchedulerViewerQuery
+// is available to the viewer's controller.
+// ─────────────────────────────────────────────────────────────────────────────
+builder.Services.AddSchedulerViewer(opts =>
+{
+    opts.Title      = "Sample App Scheduler";
+    opts.PathPrefix = "/scheduler-management";
+
+    // In production, guard the UI — e.g. role check, API key, etc.
+    // opts.AuthorizeAsync = ctx => Task.FromResult(ctx.User.IsInRole("Admin"));
+    // For the sample we leave it open (no auth guard).
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Build & configure pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
@@ -95,6 +114,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
+
+// ── Scheduler Admin UI ────────────────────────────────────────────────────
+// Must be called after UseRouting (implicit in WebApplication) and before MapControllers.
+app.UseSchedulerViewer();   // auth guard middleware
+app.MapSchedulerViewer();   // MVC area routes → /scheduler-management
+
 app.MapControllers();
 
 app.Run();

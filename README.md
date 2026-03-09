@@ -16,6 +16,7 @@ SW.Scheduler is split into focused packages so each project only takes the depen
 | `SW.Scheduler.PgSql` | `SimplyWorks.Scheduler.PgSql` | Host project — PostgreSQL persistent Quartz store |
 | `SW.Scheduler.SqlServer` | `SimplyWorks.Scheduler.SqlServer` | Host project — SQL Server persistent Quartz store |
 | `SW.Scheduler.MySql` | `SimplyWorks.Scheduler.MySql` | Host project — MySQL/MariaDB persistent Quartz store |
+| `SW.Scheduler.Viewer` | `SimplyWorks.Scheduler.Viewer` | Host project — **built-in HTMX admin UI** (optional) |
 
 > **Rule of thumb**: projects that only *define* jobs reference `SW.Scheduler.Sdk`. Only the startup/host project references a provider package (`PgSql`, `SqlServer`, or `MySql`), which pulls in `SW.Scheduler` and `SW.Scheduler.EfCore` transitively.
 
@@ -47,6 +48,13 @@ dotnet add package SimplyWorks.Scheduler.EfCore
 # In-memory only (development / testing)
 dotnet add package SimplyWorks.Scheduler
 ```
+
+**Optionally — add the built-in admin UI:**
+```bash
+dotnet add package SimplyWorks.Scheduler.Viewer
+```
+
+> The admin UI is entirely optional. If you prefer to build your own dashboard, skip this package and inject `ISchedulerViewerQuery` or `IScheduleReader` directly into your own controllers. See [Building a Custom UI](#-building-a-custom-ui) below.
 
 ### 2. Define a simple job
 
@@ -115,6 +123,163 @@ Then add and apply a migration as normal:
 dotnet ef migrations add AddScheduler
 dotnet ef database update
 ```
+
+---
+
+## 🖥️ Admin UI (`SW.Scheduler.Viewer`)
+
+`SW.Scheduler.Viewer` ships a lightweight, server-rendered dashboard built with [HTMX](https://htmx.org/) and [Pico.css](https://picocss.com/). It mounts at a configurable path (default `/scheduler-management`) and requires **no JavaScript framework**.
+
+**Features:**
+- Live dashboard — currently running jobs, recent executions, success rate
+- Execution history with filtering by job group and status
+- Per-execution detail view including job parameters (context) and error messages
+- Auto-refreshing via HTMX partial swaps (no full page reloads)
+
+### Installation
+
+```bash
+dotnet add package SimplyWorks.Scheduler.Viewer
+```
+
+> Requires `SimplyWorks.Scheduler.EfCore` and `AddSchedulerMonitoring<TDbContext>()` to be registered first — the viewer reads from the `job_executions` table.
+
+### Wiring it up
+
+```csharp
+// Program.cs
+
+// 1. Register services — call before builder.Build()
+builder.Services.AddControllersWithViews(); // required if not already added
+builder.Services.AddSchedulerMonitoring<AppDbContext>(); // must come first
+
+builder.Services.AddSchedulerViewer(opts =>
+{
+    opts.PathPrefix = "/scheduler-management"; // default — change as needed
+    opts.Title      = "My App Scheduler";      // shown in the browser tab and header
+});
+
+var app = builder.Build();
+
+// 2. Wire middleware and routes — call after UseRouting (implicit in WebApplication)
+app.UseSchedulerViewer();  // auth guard middleware
+app.MapSchedulerViewer();  // MVC routes under PathPrefix
+app.MapControllers();
+
+app.Run();
+```
+
+### Authentication
+
+The viewer has **no built-in authentication** — you supply the authorization logic via a delegate. This keeps the package decoupled from your auth stack (Identity, JWT, API keys, sessions, etc.).
+
+Set `AuthorizeAsync` on the options. It receives the `HttpContext` and must return `true` to allow or `false` to respond with `401 Unauthorized`.
+
+#### ASP.NET Core Identity / role check
+
+```csharp
+builder.Services.AddSchedulerViewer(opts =>
+{
+    opts.AuthorizeAsync = ctx =>
+        Task.FromResult(ctx.User.Identity?.IsAuthenticated == true
+                     && ctx.User.IsInRole("Admin"));
+});
+```
+
+#### API key header
+
+```csharp
+builder.Services.AddSchedulerViewer(opts =>
+{
+    opts.AuthorizeAsync = ctx =>
+    {
+        var key = ctx.Request.Headers["X-Scheduler-Key"].FirstOrDefault();
+        return Task.FromResult(key == configuration["Scheduler:AdminKey"]);
+    };
+});
+```
+
+#### Cookie / session token
+
+```csharp
+builder.Services.AddSchedulerViewer(opts =>
+{
+    opts.AuthorizeAsync = ctx =>
+        Task.FromResult(ctx.Request.Cookies["scheduler_auth"] == "my-secret-token");
+});
+```
+
+#### Policy-based (ASP.NET Core authorization middleware)
+
+If you'd rather use `[Authorize]` policies from the built-in middleware, configure `AuthorizeAsync` to call `IAuthorizationService`:
+
+```csharp
+builder.Services.AddSchedulerViewer(opts =>
+{
+    opts.AuthorizeAsync = async ctx =>
+    {
+        var authService = ctx.RequestServices.GetRequiredService<IAuthorizationService>();
+        var result = await authService.AuthorizeAsync(ctx.User, "SchedulerAdminPolicy");
+        return result.Succeeded;
+    };
+});
+```
+
+> ⚠️ **Never leave `AuthorizeAsync` as `null` in production.** When `null` all requests are allowed — this is intentional for local development only.
+
+### `SchedulerViewerOptions` reference
+
+| Option | Default | Description |
+|---|---|---|
+| `PathPrefix` | `"/scheduler-management"` | URL path where the UI is mounted |
+| `Title` | `"Scheduler"` | Title in the browser tab and page header |
+| `DefaultPageSize` | `50` | Number of rows shown on the History page |
+| `AuthorizeAsync` | `null` *(allow all)* | Async delegate returning `true` to allow a request |
+
+---
+
+## 🔧 Building a Custom UI
+
+Don't want the built-in viewer? Skip `SimplyWorks.Scheduler.Viewer` entirely and build your own dashboard using the two query interfaces exposed by the library.
+
+### Option A — `IScheduleReader` (type-safe, generic)
+
+Inject `IScheduleReader` for strongly-typed queries scoped to a specific job type. Requires `SW.Scheduler.EfCore`.
+
+```csharp
+// In your own controller or Razor Page
+public class MyDashboardController(IScheduleReader reader) : Controller
+{
+    public async Task<IActionResult> Index()
+    {
+        var running = await reader.GetRunningExecutions();
+        var recent  = await reader.GetRecentExecutions<DailyReportJob>(limit: 20);
+        var failed  = await reader.GetFailedExecutions<DailyReportJob>(
+                          since: DateTime.UtcNow.AddDays(-7));
+        // ...
+    }
+}
+```
+
+### Option B — `ISchedulerViewerQuery` (non-generic, UI-friendly)
+
+Inject `ISchedulerViewerQuery` for runtime queries without knowing job types at compile time — ideal for a generic dashboard. Registered automatically by `AddSchedulerMonitoring<TDbContext>()`.
+
+```csharp
+public class MyDashboardController(ISchedulerViewerQuery query) : Controller
+{
+    public async Task<IActionResult> Index()
+    {
+        var running = await query.GetRunningAsync();
+        var recent  = await query.GetRecentAsync(limit: 50);
+        var history = await query.GetHistoryAsync(jobGroup: null, success: false, limit: 20);
+        var detail  = await query.GetByFireInstanceIdAsync("some-fire-id");
+        // ...
+    }
+}
+```
+
+Both interfaces work with any database provider (PostgreSQL, SQL Server, MySQL) — the implementation is in `SW.Scheduler.EfCore`.
 
 ---
 

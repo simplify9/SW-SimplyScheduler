@@ -53,16 +53,16 @@ internal class JobsDiscovery(IServiceProvider sp, ILogger<JobsDiscovery> logger)
         return backgroundJobDefinitions;
     }
 
-    private IReadOnlyCollection<ScheduledJobDefinition> _jobDefinitions;
+    private IReadOnlyCollection<ScheduledJobDefinition>? _jobDefinitions;
 
     public IReadOnlyCollection<ScheduledJobDefinition> All
     {
         get { return _jobDefinitions ??= Load(); }
     }
 
-    public ScheduledJobDefinition GetJobDefinition(string jobName, string group) =>
+    public ScheduledJobDefinition? GetJobDefinition(string jobName, string group) =>
         All.FirstOrDefault(x => x.Name == jobName && x.Group == group);
 
-    public ScheduledJobDefinition GetJobDefinition(Type jobType) =>
+    public ScheduledJobDefinition? GetJobDefinition(Type jobType) =>
         All.FirstOrDefault(x => x.JobType == jobType);
 }

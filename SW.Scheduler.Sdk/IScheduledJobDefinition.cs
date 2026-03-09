@@ -11,7 +11,7 @@ public interface IScheduledJobDefinition
     /// <summary>
     /// The CLR type of the job's parameter object, or <c>null</c> for simple (non-parameterized) jobs.
     /// </summary>
-    Type JobParamsType { get; }
+    Type? JobParamsType { get; }
 
     /// <summary><c>true</c> if this job requires a parameter object to execute.</summary>
     bool WithParams { get; }

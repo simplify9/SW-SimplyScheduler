@@ -1,0 +1,70 @@
+@model SW.Scheduler.Viewer.DashboardViewModel
+@{
+    Layout   = null;
+    var basePath = ViewBag.BasePath as string ?? "/scheduler-management";
+    ViewBag.ShowStatus = false;
+}
+
+<div class="section-header" style="margin-bottom:1.5rem;">
+    <h2 style="margin:0">@Model.Title — Dashboard</h2>
+    <button hx-get="@basePath"
+            hx-target="#sw-content"
+            hx-swap="innerHTML"
+            hx-indicator="#spin"
+            style="width:auto;margin:0;">
+        ↻ Refresh
+        <span id="spin" class="htmx-indicator"> …</span>
+    </button>
+</div>
+
+@* ── Stat cards ── *@
+<div class="stat-grid">
+    <div class="stat-card" style="background:#dbeafe;color:#1e40af;">
+        <div class="stat-value">@Model.Running.Count</div>
+        <div class="stat-label">Running now</div>
+    </div>
+    <div class="stat-card" style="background:#f3f4f6;color:#374151;">
+        <div class="stat-value">@Model.Recent.Count</div>
+        <div class="stat-label">Recent executions</div>
+    </div>
+    <div class="stat-card" style="background:#fee2e2;color:#991b1b;">
+        <div class="stat-value">@Model.FailureCount</div>
+        <div class="stat-label">Failures (recent)</div>
+    </div>
+    <div class="stat-card" style="background:#d1fae5;color:#065f46;">
+        <div class="stat-value">@Model.SuccessRate%</div>
+        <div class="stat-label">Success rate</div>
+    </div>
+</div>
+
+@* ── Currently Running ── *@
+<div class="section-header">
+    <h3>Currently Running</h3>
+    <a href="@basePath/Running"
+       hx-get="@basePath/Running"
+       hx-target="#sw-content"
+       hx-swap="innerHTML"
+       hx-push-url="true"
+       style="font-size:.88rem;">
+        View all →
+    </a>
+</div>
+
+@{ ViewBag.ShowStatus = false; }
+@await Html.PartialAsync("_ExecutionTable", Model.Running)
+
+@* ── Recent Executions ── *@
+<div class="section-header" style="margin-top:2rem;">
+    <h3>Recent Executions</h3>
+    <a href="@basePath/History"
+       hx-get="@basePath/History"
+       hx-target="#sw-content"
+       hx-swap="innerHTML"
+       hx-push-url="true"
+       style="font-size:.88rem;">
+        View all history →
+    </a>
+</div>
+
+@{ ViewBag.ShowStatus = true; }
+@await Html.PartialAsync("_ExecutionTable", Model.Recent)

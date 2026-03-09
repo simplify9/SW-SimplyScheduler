@@ -1,0 +1,47 @@
+@model SW.Scheduler.Viewer.JobsViewModel
+@{
+    Layout   = null;
+    var basePath = ViewBag.BasePath as string ?? "/scheduler-management";
+}
+
+<div class="section-header" style="margin-bottom:1.5rem;">
+    <h2 style="margin:0">⚙️ Jobs</h2>
+    <button hx-get="@basePath/Jobs"
+            hx-target="#sw-content"
+            hx-swap="innerHTML"
+            hx-indicator="#spin"
+            style="width:auto;margin:0;">
+        ↻ Refresh
+        <span id="spin" class="htmx-indicator"> …</span>
+    </button>
+</div>
+
+@if (!Model.Jobs.Any())
+{
+    <p style="opacity:.6">No jobs registered yet. Jobs appear here after the scheduler starts and discovers your <code>IScheduledJob</code> implementations.</p>
+}
+else
+{
+    <div style="overflow-x:auto;">
+        <table role="grid">
+            <thead>
+                <tr>
+                    <th>Job</th>
+                    <th>Group</th>
+                    <th>State</th>
+                    <th>Cron</th>
+                    <th>Next Fire</th>
+                    <th>Last Fire</th>
+                    <th style="min-width:22rem;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var job in Model.Jobs)
+                {
+                    @await Html.PartialAsync("_JobRow", new SW.Scheduler.Viewer.JobRowViewModel { Job = job })
+                }
+            </tbody>
+        </table>
+    </div>
+}
+

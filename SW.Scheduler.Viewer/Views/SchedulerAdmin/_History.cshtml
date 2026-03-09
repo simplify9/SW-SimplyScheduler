@@ -1,0 +1,53 @@
+@model SW.Scheduler.Viewer.HistoryViewModel
+@{
+    Layout   = null;
+    var basePath = ViewBag.BasePath as string ?? "/scheduler-management";
+    ViewBag.ShowStatus = true;
+
+    // Pre-compute selected attributes. The entire <select> is emitted via @Html.Raw
+    // so no C# appears inside a tag-helper attribute area (avoids RZ1031).
+    var selAll     = Model.Success == null  ? "selected" : "";
+    var selSuccess = Model.Success == true  ? "selected" : "";
+    var selFailed  = Model.Success == false ? "selected" : "";
+    var selectHtml = "<select name=\"success\">"
+                   + "<option value=\"\" "      + selAll     + ">All</option>"
+                   + "<option value=\"true\" "  + selSuccess + ">Success</option>"
+                   + "<option value=\"false\" " + selFailed  + ">Failed</option>"
+                   + "</select>";
+}
+
+<h2>📋 Execution History</h2>
+
+@* Filter form — HTMX submits GET and swaps the content area *@
+<form hx-get="@basePath/History"
+      hx-target="#sw-content"
+      hx-swap="innerHTML"
+      hx-push-url="true"
+      style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.5rem;">
+
+    <label style="flex:1;min-width:200px;">
+        Job group / type
+        <input type="text"
+               name="jobGroup"
+               value="@Model.JobGroup"
+               placeholder="e.g. Jobs.SendCustomerEmailsJob"/>
+    </label>
+
+    <label style="width:160px;">
+        Status
+        @Html.Raw(selectHtml)
+    </label>
+
+    <label style="width:100px;">
+        Limit
+        <input type="number" name="limit" value="@Model.Limit" min="1" max="500"/>
+    </label>
+
+    <div>
+        <button type="submit" style="width:auto;margin-top:1.4rem;">Filter</button>
+    </div>
+</form>
+
+@await Html.PartialAsync("_ExecutionTable", Model.Executions)
+
+

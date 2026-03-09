@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+        <RazorCompileOnBuild>true</RazorCompileOnBuild>
+        <RazorCompileOnPublish>true</RazorCompileOnPublish>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!--
+            ASP.NET Core framework reference — gives us IApplicationBuilder, HttpContext,
+            IEndpointRouteBuilder, etc. without pulling in a concrete runtime package.
+            Users install their own Microsoft.AspNetCore.App runtime.
+        -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" />
+    </ItemGroup>
+
+</Project>

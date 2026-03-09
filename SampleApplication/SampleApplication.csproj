@@ -18,6 +18,7 @@
       <ProjectReference Include="..\SW.Scheduler.EfCore\SW.Scheduler.EfCore.csproj" />
       <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" />
       <ProjectReference Include="..\SW.Scheduler.PgSql\SW.Scheduler.PgSql.csproj" />
+      <ProjectReference Include="..\SW.Scheduler.Viewer\SW.Scheduler.Viewer.csproj" />
     </ItemGroup>
 
 </Project>

@@ -103,6 +103,9 @@ public static class SchedulerServiceCollectionExtensions
         if (services.All(d => d.ServiceType != typeof(IScheduleReader)))
             services.AddScoped<IScheduleReader, ScheduleReader>();
 
+        if (services.All(d => d.ServiceType != typeof(ISchedulerViewerCommand)))
+            services.AddScoped<ISchedulerViewerCommand, QuartzSchedulerViewerCommand>();
+
         return services;
     }
 }

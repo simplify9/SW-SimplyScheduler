@@ -1,0 +1,82 @@
+@using System.Text.Json
+@model SW.Scheduler.Viewer.DetailViewModel
+@{
+    Layout   = null;
+    var basePath = ViewBag.BasePath as string ?? "/scheduler-management";
+    var e        = Model.Execution;
+
+    var status = e.EndTimeUtc == null ? "running"
+               : e.Success == true    ? "success"
+               : "fail";
+}
+
+<div style="margin-bottom:1rem;">
+    <a href="@basePath/History"
+       hx-get="@basePath/History"
+       hx-target="#sw-content"
+       hx-swap="innerHTML"
+       hx-push-url="true"
+       style="font-size:.88rem;">
+        ← Back to History
+    </a>
+</div>
+
+<h2>Execution Detail</h2>
+
+<article>
+    <header style="display:flex;align-items:center;gap:.75rem;">
+        <strong style="font-size:1.1rem;">@e.JobTypeName</strong>
+        @if (status == "success")
+        { <span class="badge badge-success">✓ Success</span> }
+        else if (status == "fail")
+        { <span class="badge badge-fail">✗ Failed</span> }
+        else
+        { <span class="badge badge-running">⟳ Running</span> }
+    </header>
+
+    <table>
+        <tbody>
+            <tr><th style="width:180px">Job Group</th>   <td class="mono">@e.JobGroup</td></tr>
+            <tr><th>Job Name</th>    <td class="mono">@e.JobName</td></tr>
+            <tr><th>Fire Instance</th><td class="mono">@e.FireInstanceId</td></tr>
+            <tr><th>Node</th>        <td>@e.Node</td></tr>
+            <tr><th>Started (UTC)</th><td>@e.StartTimeUtc.ToString("yyyy-MM-dd HH:mm:ss")</td></tr>
+            <tr>
+                <th>Finished (UTC)</th>
+                <td>@(e.EndTimeUtc.HasValue ? e.EndTimeUtc.Value.ToString("yyyy-MM-dd HH:mm:ss") : "—")</td>
+            </tr>
+            <tr>
+                <th>Duration</th>
+                <td>@(e.DurationMs.HasValue ? $"{e.DurationMs:N0} ms" : "—")</td>
+            </tr>
+        </tbody>
+    </table>
+
+    @if (e.Error != null)
+    {
+        <div class="error-box" style="margin-top:1rem;">
+            <strong>Error</strong>
+            <pre style="margin:.5rem 0 0;white-space:pre-wrap;font-size:.82rem;">@e.Error</pre>
+        </div>
+    }
+
+    @if (e.Context != null)
+    {
+        string prettyJson;
+        try
+        {
+            var doc = JsonDocument.Parse(e.Context);
+            prettyJson = JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            prettyJson = e.Context;
+        }
+
+        <details style="margin-top:1rem;">
+            <summary><strong>Job Parameter (Context)</strong></summary>
+            <pre class="mono" style="margin-top:.5rem;white-space:pre-wrap;background:#f8fafc;padding:.75rem;border-radius:.5rem;">@prettyJson</pre>
+        </details>
+    }
+</article>
+

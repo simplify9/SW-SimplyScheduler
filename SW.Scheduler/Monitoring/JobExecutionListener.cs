@@ -1,6 +1,5 @@
 #nullable enable
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
@@ -111,14 +110,14 @@ internal sealed class JobExecutionListener(
         context.MergedJobDataMap.TryGetString(Constants.JobParamsKey, out var rawParams);
         if (!string.IsNullOrWhiteSpace(rawParams))
         {
-            var paramObject = JsonSerializer.Deserialize<object>(rawParams, _serializerOptions);
+            var paramObject = JsonSerializer.Deserialize<object>(rawParams, SerializerOptions);
             record.SetContext(new ScheduledJobContext { JobParameter = paramObject });
         }
 
         return record;
     }
 
-    private static readonly JsonSerializerOptions _serializerOptions = new()
+    private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };

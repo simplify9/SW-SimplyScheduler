@@ -31,10 +31,10 @@ internal static class JobKeyConventions
 
 internal class ScheduledJobDefinition : IScheduledJobDefinition
 {
-    public string JobParamsTypeName { get; set; }
-    public Type JobParamsType { get; set; }
-    public MethodInfo ExecutMethod { get; set; }
-    public Type JobType { get; set; }
+    public string? JobParamsTypeName { get; set; }
+    public Type? JobParamsType { get; set; }
+    public required MethodInfo ExecutMethod { get; set; }
+    public required Type JobType { get; set; }
     public bool WithParams => JobParamsType != null;
     public string Name => JobType.Name;
 
