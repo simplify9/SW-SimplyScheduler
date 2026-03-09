@@ -1,21 +1,38 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-    </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
 
-    <ItemGroup>
-      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
-      <PackageReference Include="Quartz.Extensions.Hosting" Version="3.15.0" />
-      <PackageReference Include="Quartz.Serialization.SystemTextJson" Version="3.15.0" />
-      <PackageReference Include="Scrutor" Version="6.1.0" />
-      <PackageReference Include="SimplyWorks.PrimitiveTypes" Version="8.1.2" />
-    </ItemGroup>
+    <PackageId>SimplyWorks.Scheduler</PackageId>
+    <Authors>Simplify9</Authors>
+    <Product>SimplyWorks.Scheduler</Product>
+    <Description>Host/startup package for SW.Scheduler — a type-safe Quartz.NET wrapper for .NET 8+. Provides in-memory scheduling, job discovery, retry strategies, and job execution monitoring. Use alongside a provider package (SimplyWorks.Scheduler.PgSql, SqlServer, or MySql) for persistent storage.</Description>
+    <PackageTags>scheduler quartz jobs background cron simplifyworks</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/simplify9/SW-SimplyScheduler</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/simplify9/SW-SimplyScheduler</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>See https://github.com/simplify9/SW-SimplyScheduler/releases for release notes.</PackageReleaseNotes>
+  </PropertyGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" />
-    </ItemGroup>
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.15.0" />
+    <PackageReference Include="Quartz.Serialization.SystemTextJson" Version="3.15.0" />
+    <PackageReference Include="Scrutor" Version="6.1.0" />
+    <PackageReference Include="SimplyWorks.PrimitiveTypes" Version="8.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PrivateAssets=none causes dotnet pack to emit this as a NuGet dependency -->
+    <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" PrivateAssets="none" />
+  </ItemGroup>
 
 </Project>

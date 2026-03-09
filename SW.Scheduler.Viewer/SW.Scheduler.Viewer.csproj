@@ -7,7 +7,23 @@
         <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
         <RazorCompileOnBuild>true</RazorCompileOnBuild>
         <RazorCompileOnPublish>true</RazorCompileOnPublish>
+
+        <PackageId>SimplyWorks.Scheduler.Viewer</PackageId>
+        <Authors>Simplify9</Authors>
+        <Product>SimplyWorks.Scheduler.Viewer</Product>
+        <Description>Built-in HTMX admin UI for SW.Scheduler. Mounts a server-rendered dashboard (Pico.css + HTMX) at a configurable route. Displays running jobs, execution history, and provides Pause / Resume / Reschedule / Unschedule controls. Authentication is delegated to the host application via a configurable delegate.</Description>
+        <PackageTags>scheduler quartz jobs admin ui htmx dashboard simplifyworks</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageProjectUrl>https://github.com/simplify9/SW-SimplyScheduler</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/simplify9/SW-SimplyScheduler</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageReleaseNotes>See https://github.com/simplify9/SW-SimplyScheduler/releases for release notes.</PackageReleaseNotes>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="../README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
 
     <ItemGroup>
         <!--
@@ -19,7 +35,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" />
+        <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" PrivateAssets="none" />
     </ItemGroup>
 
 </Project>

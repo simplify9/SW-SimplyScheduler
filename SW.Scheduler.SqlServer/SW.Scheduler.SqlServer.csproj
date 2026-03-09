@@ -1,22 +1,37 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-    </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
 
-    <ItemGroup>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
-        <PackageReference Include="Quartz" Version="3.15.0" />
-        <PackageReference Include="Quartz.Extensions.Hosting" Version="3.15.0" />
-        <PackageReference Include="Quartz.Serialization.SystemTextJson" Version="3.15.0" />
-    </ItemGroup>
+    <PackageId>SimplyWorks.Scheduler.SqlServer</PackageId>
+    <Authors>Simplify9</Authors>
+    <Product>SimplyWorks.Scheduler.SqlServer</Product>
+    <Description>SQL Server provider for SW.Scheduler. Configures a persistent Quartz.NET store backed by SQL Server and wires EF Core entity configurations for Quartz tables. Call AddSqlServerScheduler() and modelBuilder.UseQuartzSqlServer() to enable.</Description>
+    <PackageTags>scheduler quartz sqlserver mssql jobs background cron simplifyworks</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/simplify9/SW-SimplyScheduler</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/simplify9/SW-SimplyScheduler</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>See https://github.com/simplify9/SW-SimplyScheduler/releases for release notes.</PackageReleaseNotes>
+  </PropertyGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\SW.Scheduler\SW.Scheduler.csproj" />
-        <ProjectReference Include="..\SW.Scheduler.EfCore\SW.Scheduler.EfCore.csproj" />
-    </ItemGroup>
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
+    <PackageReference Include="Quartz" Version="3.15.0" />
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.15.0" />
+    <PackageReference Include="Quartz.Serialization.SystemTextJson" Version="3.15.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SW.Scheduler\SW.Scheduler.csproj" PrivateAssets="none" />
+    <ProjectReference Include="..\SW.Scheduler.EfCore\SW.Scheduler.EfCore.csproj" PrivateAssets="none" />
+  </ItemGroup>
 
 </Project>
-

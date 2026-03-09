@@ -1,16 +1,35 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <PackageId>SimplyWorks.Scheduler.EfCore</PackageId>
+    <Authors>Simplify9</Authors>
+    <Product>SimplyWorks.Scheduler.EfCore</Product>
+    <Description>EF Core integration for SW.Scheduler. Provides job execution monitoring, execution history storage, and the ISchedulerViewerQuery implementation. Call AddSchedulerMonitoring&lt;TDbContext&gt;() and add ApplyScheduling() in your DbContext to enable.</Description>
+    <PackageTags>scheduler quartz jobs efcore monitoring simplifyworks</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/simplify9/SW-SimplyScheduler</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/simplify9/SW-SimplyScheduler</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>See https://github.com/simplify9/SW-SimplyScheduler/releases for release notes.</PackageReleaseNotes>
   </PropertyGroup>
+
   <ItemGroup>
-    <ProjectReference Include="..\SW.Scheduler\SW.Scheduler.csproj" />
-    <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" />
+    <None Include="../README.md" Pack="true" PackagePath="\"/>
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SW.Scheduler\SW.Scheduler.csproj" PrivateAssets="none" />
+    <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" PrivateAssets="none" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.0" />
   </ItemGroup>
-</Project>
 
+</Project>
