@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MAJOR: '8'
-      MINOR: '0'
+      MINOR: '1'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,64 +31,10 @@ jobs:
           dotnet-version: "8.0.x"
           run-tests: 'false'
 
-      - name: Pack and Push SimplyWorks.Scheduler.Sdk
+      - name: Pack and Push NuGet Packages
         uses: simplify9/sw-workflows/actions/dotnet-pack-push@main
         with:
-          projects: "SW.Scheduler.Sdk/SW.Scheduler.Sdk.csproj"
-          configuration: "Release"
-          version: ${{ steps.semver.outputs.version }}
-          api-key: ${{ secrets.SWNUGETKEY }}
-          nuget-source: "https://api.nuget.org/v3/index.json"
-
-      - name: Pack and Push SimplyWorks.Scheduler
-        uses: simplify9/sw-workflows/actions/dotnet-pack-push@main
-        with:
-          projects: "SW.Scheduler/SW.Scheduler.csproj"
-          configuration: "Release"
-          version: ${{ steps.semver.outputs.version }}
-          api-key: ${{ secrets.SWNUGETKEY }}
-          nuget-source: "https://api.nuget.org/v3/index.json"
-
-      - name: Pack and Push SimplyWorks.Scheduler.EfCore
-        uses: simplify9/sw-workflows/actions/dotnet-pack-push@main
-        with:
-          projects: "SW.Scheduler.EfCore/SW.Scheduler.EfCore.csproj"
-          configuration: "Release"
-          version: ${{ steps.semver.outputs.version }}
-          api-key: ${{ secrets.SWNUGETKEY }}
-          nuget-source: "https://api.nuget.org/v3/index.json"
-
-      - name: Pack and Push SimplyWorks.Scheduler.PgSql
-        uses: simplify9/sw-workflows/actions/dotnet-pack-push@main
-        with:
-          projects: "SW.Scheduler.PgSql/SW.Scheduler.PgSql.csproj"
-          configuration: "Release"
-          version: ${{ steps.semver.outputs.version }}
-          api-key: ${{ secrets.SWNUGETKEY }}
-          nuget-source: "https://api.nuget.org/v3/index.json"
-
-      - name: Pack and Push SimplyWorks.Scheduler.SqlServer
-        uses: simplify9/sw-workflows/actions/dotnet-pack-push@main
-        with:
-          projects: "SW.Scheduler.SqlServer/SW.Scheduler.SqlServer.csproj"
-          configuration: "Release"
-          version: ${{ steps.semver.outputs.version }}
-          api-key: ${{ secrets.SWNUGETKEY }}
-          nuget-source: "https://api.nuget.org/v3/index.json"
-
-      - name: Pack and Push SimplyWorks.Scheduler.MySql
-        uses: simplify9/sw-workflows/actions/dotnet-pack-push@main
-        with:
-          projects: "SW.Scheduler.MySql/SW.Scheduler.MySql.csproj"
-          configuration: "Release"
-          version: ${{ steps.semver.outputs.version }}
-          api-key: ${{ secrets.SWNUGETKEY }}
-          nuget-source: "https://api.nuget.org/v3/index.json"
-
-      - name: Pack and Push SimplyWorks.Scheduler.Viewer
-        uses: simplify9/sw-workflows/actions/dotnet-pack-push@main
-        with:
-          projects: "SW.Scheduler.Viewer/SW.Scheduler.Viewer.csproj"
+          projects: "SW.Scheduler.Sdk/SW.Scheduler.Sdk.csproj SW.Scheduler/SW.Scheduler.csproj SW.Scheduler.EfCore/SW.Scheduler.EfCore.csproj SW.Scheduler.PgSql/SW.Scheduler.PgSql.csproj SW.Scheduler.SqlServer/SW.Scheduler.SqlServer.csproj SW.Scheduler.MySql/SW.Scheduler.MySql.csproj SW.Scheduler.Viewer/SW.Scheduler.Viewer.csproj"
           configuration: "Release"
           version: ${{ steps.semver.outputs.version }}
           api-key: ${{ secrets.SWNUGETKEY }}
