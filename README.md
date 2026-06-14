@@ -382,6 +382,16 @@ await _scheduler.RescheduleJob<NotifyCustomerJob, NotifyParams>("notify-customer
 await _scheduler.PauseJob<NotifyCustomerJob, NotifyParams>("notify-customer-42");
 await _scheduler.ResumeJob<NotifyCustomerJob, NotifyParams>("notify-customer-42");
 await _scheduler.UnscheduleJob<NotifyCustomerJob, NotifyParams>("notify-customer-42");
+
+// Idempotent registration — creates the schedule only if it doesn't already exist.
+// Returns true when newly created, false when it already existed.
+// Designed for seed-style registration on app startup against a persistent store:
+// safe to call on every restart across multiple nodes without creating duplicates.
+bool created = await _scheduler.ScheduleIfNotExists<NotifyCustomerJob, NotifyParams>(
+    param: new NotifyParams(42, "welcome"),
+    cronExpression: "0 0 9 * * ?",
+    scheduleKey: "notify-customer-42"
+);
 ```
 
 ### Per-schedule config override
@@ -446,6 +456,20 @@ Each execution is uploaded to:
 ---
 
 ## 🗄️ Provider Reference
+
+The included `SampleApplication` shows all three providers wired together. Select a provider via `appsettings.json`:
+
+```json
+{
+  "Scheduler": {
+    "Provider": "pgsql",      // "pgsql" | "mssql" | "mysql" | (omit for in-memory)
+    "Schema":   "quartz"      // used by pgsql and mssql; ignored by mysql
+  },
+  "ConnectionStrings": {
+    "Scheduler": "Host=localhost;Database=sample;Username=app;Password=secret"
+  }
+}
+```
 
 ### PostgreSQL — `SW.Scheduler.PgSql`
 

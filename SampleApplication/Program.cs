@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using SW.Scheduler;
 using SW.Scheduler.EfCore;
+using SW.Scheduler.MySql;
 using SW.Scheduler.PgSql;
+using SW.Scheduler.SqlServer;
 using SW.Scheduler.Viewer;
 using SampleApplication.Data;
 using SampleApplication;
@@ -12,11 +14,17 @@ var cfg = builder.Configuration;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Read scheduler config
-// Scheduler:UseDatabase = false  → in-memory Quartz + InMemory EF (default)
-// Scheduler:UseDatabase = true   → PostgreSQL Quartz + Npgsql EF
+//
+// Scheduler:Provider values:
+//   "pgsql"   → PostgreSQL  (ConnectionStrings:Scheduler required)
+//   "mssql"   → SQL Server  (ConnectionStrings:Scheduler required)
+//   "mysql"   → MySQL       (ConnectionStrings:Scheduler required)
+//   (default) → in-memory   (no connection string needed)
+//
+// Scheduler:Schema is used by pgsql and mssql (default: "quartz").
 // ─────────────────────────────────────────────────────────────────────────────
-var useDatabase = cfg.GetValue<bool>("Scheduler:UseDatabase");
-var schema      = cfg.GetValue<string>("Scheduler:Schema") ?? "quartz";
+var provider = cfg.GetValue<string>("Scheduler:Provider")?.ToLowerInvariant() ?? "inmemory";
+var schema   = cfg.GetValue<string>("Scheduler:Schema") ?? "quartz";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Infrastructure
@@ -28,24 +36,6 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "SW.Scheduler Sample", Version = "v1" });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EF Core
-// ─────────────────────────────────────────────────────────────────────────────
-if (useDatabase)
-{
-    var connStr = cfg.GetConnectionString("Postgres")
-        ?? throw new InvalidOperationException(
-            "ConnectionStrings:Postgres is required when Scheduler:UseDatabase = true");
-
-    builder.Services.AddDbContext<AppDbContext>(opt =>
-        opt.UseNpgsql(connStr));
-}
-else
-{
-    builder.Services.AddDbContext<AppDbContext>(opt =>
-        opt.UseInMemoryDatabase("SampleAppDb"));
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scheduler options — shared regardless of provider
@@ -60,24 +50,66 @@ void ConfigureSchedulerOptions(SchedulerOptions options)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scheduler — in-memory or PostgreSQL
+// EF Core + Scheduler — wired per provider
 // ─────────────────────────────────────────────────────────────────────────────
-if (useDatabase)
+switch (provider)
 {
-    var connStr = cfg.GetConnectionString("Postgres")!;
+    case "pgsql":
+    {
+        var connStr = cfg.GetConnectionString("Scheduler")
+            ?? throw new InvalidOperationException("ConnectionStrings:Scheduler is required for provider 'pgsql'");
 
-    builder.Services.AddPgSqlScheduler(
-        connectionString: connStr,
-        schema: schema,
-        configureOptions: ConfigureSchedulerOptions,
-        assemblies: typeof(Program).Assembly);
-}
-else
-{
-    // In-memory Quartz store — no migrations, no persistence across restarts.
-    builder.Services.AddScheduler(
-        configureOptions: ConfigureSchedulerOptions,
-        assemblies: typeof(Program).Assembly);
+        builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connStr));
+
+        builder.Services.AddPgSqlScheduler(
+            connectionString: connStr,
+            schema: schema,
+            configureOptions: ConfigureSchedulerOptions,
+            assemblies: typeof(Program).Assembly);
+        break;
+    }
+
+    case "mssql":
+    {
+        var connStr = cfg.GetConnectionString("Scheduler")
+            ?? throw new InvalidOperationException("ConnectionStrings:Scheduler is required for provider 'mssql'");
+
+        builder.Services.AddDbContext<AppDbContext>(opt => opt.UseSqlServer(connStr));
+
+        builder.Services.AddSqlServerScheduler(
+            connectionString: connStr,
+            configureOptions: ConfigureSchedulerOptions,
+            configure: o => o.Schema = schema,
+            assemblies: typeof(Program).Assembly);
+        break;
+    }
+
+    case "mysql":
+    {
+        var connStr = cfg.GetConnectionString("Scheduler")
+            ?? throw new InvalidOperationException("ConnectionStrings:Scheduler is required for provider 'mysql'");
+
+        builder.Services.AddDbContext<AppDbContext>(opt =>
+            opt.UseMySql(connStr, ServerVersion.AutoDetect(connStr)));
+
+        builder.Services.AddMySqlScheduler(
+            connectionString: connStr,
+            configureOptions: ConfigureSchedulerOptions,
+            assemblies: typeof(Program).Assembly);
+        break;
+    }
+
+    default:
+    {
+        // In-memory Quartz store — no migrations, no persistence across restarts.
+        builder.Services.AddDbContext<AppDbContext>(opt =>
+            opt.UseInMemoryDatabase("SampleAppDb"));
+
+        builder.Services.AddScheduler(
+            configureOptions: ConfigureSchedulerOptions,
+            assemblies: typeof(Program).Assembly);
+        break;
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,7 +160,7 @@ static async Task SeedAsync(WebApplication app)
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
     // Create the database and schema if they don't exist.
-    // EnsureCreatedAsync works for both InMemory and real providers (PostgreSQL etc.).
+    // EnsureCreatedAsync works for InMemory and real providers.
     // It creates tables directly from the model without migrations — suitable for a sample app.
     await db.Database.EnsureCreatedAsync();
 
@@ -143,5 +175,3 @@ static async Task SeedAsync(WebApplication app)
     );
     await db.SaveChangesAsync();
 }
-
-

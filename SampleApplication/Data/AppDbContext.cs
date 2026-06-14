@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SW.Scheduler.EfCore;
+using SW.Scheduler.MySql;
 using SW.Scheduler.PgSql;
+using SW.Scheduler.SqlServer;
 
 namespace SampleApplication.Data;
 
@@ -29,14 +31,23 @@ public class AppDbContext : DbContext
             b.HasIndex(c => c.Email).IsUnique();
         });
 
-        // Apply scheduler tables using the provider-specific extension when running
-        // against PostgreSQL, or the provider-agnostic fallback for InMemory/testing.
-        var useDatabase  = _configuration?.GetValue<bool>("Scheduler:UseDatabase") ?? false;
-        var schema       = _configuration?.GetValue<string>("Scheduler:Schema") ?? "quartz";
+        var provider = _configuration?.GetValue<string>("Scheduler:Provider")?.ToLowerInvariant() ?? "inmemory";
+        var schema   = _configuration?.GetValue<string>("Scheduler:Schema") ?? "quartz";
 
-        if (useDatabase && !Database.IsInMemory())
-            modelBuilder.UseSchedulerPostgreSql(schema);
-        else
-            modelBuilder.ApplyScheduling();
+        switch (provider)
+        {
+            case "pgsql":
+                modelBuilder.UseSchedulerPostgreSql(schema);
+                break;
+            case "mssql":
+                modelBuilder.UseSchedulerSqlServer(schema);
+                break;
+            case "mysql":
+                modelBuilder.UseSchedulerMySql();
+                break;
+            default:
+                modelBuilder.ApplyScheduling();
+                break;
+        }
     }
 }
