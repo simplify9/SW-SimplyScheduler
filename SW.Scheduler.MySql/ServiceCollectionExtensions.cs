@@ -48,7 +48,7 @@ public static class ServiceCollectionExtensions
                 s.UseProperties = true;
                 s.RetryInterval = TimeSpan.FromSeconds(15);
 
-                s.UseMySql(mysql =>
+                s.UseMySqlConnector(mysql =>
                 {
                     mysql.UseDriverDelegate<MySQLDelegate>();
                     mysql.ConnectionString = myOptions.ConnectionString;

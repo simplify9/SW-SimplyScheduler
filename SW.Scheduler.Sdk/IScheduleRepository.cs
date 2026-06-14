@@ -109,6 +109,19 @@ public interface IScheduleRepository
         where TScheduler : IScheduledJob;
 
     // -------------------------------------------------------------------------
+    // ScheduleIfNotExists
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Creates a recurring cron schedule for a parameterized job only if no schedule
+    /// with the given <paramref name="scheduleKey"/> already exists.
+    /// Returns <c>true</c> when a new schedule was created, <c>false</c> when it already existed.
+    /// Safe to call on every startup for seed-style registration.
+    /// </summary>
+    Task<bool> ScheduleIfNotExists<TScheduler, TParam>(TParam param, string cronExpression, string scheduleKey, ScheduleConfig? config = null)
+        where TScheduler : IScheduledJob<TParam>;
+
+    // -------------------------------------------------------------------------
     // Discovery
     // -------------------------------------------------------------------------
 

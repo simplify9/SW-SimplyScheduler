@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Security.Claims;
 using System.Security.Principal;
 using System.Text.Json;
@@ -10,6 +12,11 @@ namespace SW.Scheduler;
 
 internal static class QuartzJobExecutor
 {
+    private static readonly JsonSerializerOptions JobParamsDeserializeOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     public static async Task Execute(
         IJobExecutionContext context,
         IServiceProvider serviceProvider,
@@ -92,6 +99,10 @@ internal static class QuartzJobExecutor
         catch (Exception ex) when (retryEnabled)
         {
             await HandleRetry(context, jobDefinition, ex, retryMax!.Value, retryAfterMinutes, logger);
+            // Throw so Quartz calls JobWasExecuted(jobException != null), recording this
+            // attempt as a failure in the monitoring store. RefireImmediately=false because
+            // the retry trigger was already scheduled inside HandleRetry.
+            throw new JobExecutionException(ex, refireImmediately: false);
         }
         // If retry is not configured, the exception propagates to QuartzBackgroundJob
         // which wraps it in JobExecutionException (normal Quartz error path).
@@ -152,6 +163,18 @@ internal static class QuartzJobExecutor
         // Return normally — Quartz will not mark this execution as failed.
     }
 
+    // ── Unwrap reflection wrapper so the actual job exception propagates ─────
+
+    private static object? InvokeUnwrapped(MethodInfo method, object instance, object?[]? args)
+    {
+        try { return method.Invoke(instance, args); }
+        catch (TargetInvocationException tie) when (tie.InnerException != null)
+        {
+            ExceptionDispatchInfo.Capture(tie.InnerException).Throw();
+            throw; // unreachable — keeps compiler happy
+        }
+    }
+
     // ── Invoke the user's Execute method ────────────────────────────────────
 
     private static async Task InvokeExecute(
@@ -169,12 +192,12 @@ internal static class QuartzJobExecutor
                 throw new InvalidOperationException(
                     $"Job '{jobTypeName}' requires parameters but none were found in the job data map.");
 
-            var jobParams = JsonSerializer.Deserialize(value, jobDefinition.JobParamsType!);
+            var jobParams = JsonSerializer.Deserialize(value, jobDefinition.JobParamsType!, JobParamsDeserializeOptions);
             if (jobParams is null)
                 throw new InvalidOperationException(
                     $"Deserialized params for job '{jobTypeName}' resolved to null. Raw value: {value}");
 
-            var paramResult = execMethod.Invoke(svc, [jobParams]);
+            var paramResult = InvokeUnwrapped(execMethod, svc, [jobParams]);
             if (paramResult is not Task paramTask)
                 throw new InvalidOperationException(
                     $"Execute on '{jobDefinition.JobType.FullName}' did not return a Task.");
@@ -182,7 +205,7 @@ internal static class QuartzJobExecutor
         }
         else
         {
-            var result = execMethod.Invoke(svc, null);
+            var result = InvokeUnwrapped(execMethod, svc, null);
             if (result is not Task task)
                 throw new InvalidOperationException(
                     $"Execute on '{jobDefinition.JobType.FullName}' did not return a Task.");
@@ -209,9 +232,12 @@ internal class QuartzBackgroundJob(
         {
             await QuartzJobExecutor.Execute(context, serviceProvider, jobsDiscovery, logger);
         }
+        catch (JobExecutionException)
+        {
+            throw; // already wrapped by executor (retry path or non-retry path)
+        }
         catch (Exception e)
         {
-            // Only reached when retry is not configured.
             throw new JobExecutionException(e, refireImmediately: false);
         }
     }

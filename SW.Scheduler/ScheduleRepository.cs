@@ -385,6 +385,46 @@ internal class ScheduleRepository(ISchedulerFactory schedulerFactory, JobsDiscov
     }
 
     // -------------------------------------------------------------------------
+    // ScheduleIfNotExists
+    // -------------------------------------------------------------------------
+
+    public async Task<bool> ScheduleIfNotExists<TScheduler, TParam>(TParam param, string cronExpression, string scheduleKey, ScheduleConfig? config = null)
+        where TScheduler : IScheduledJob<TParam>
+    {
+        ValidateParam(param);
+        cronExpression.ValidateCronExpression();
+
+        var jobDef   = RequireJobDefinition(typeof(TScheduler));
+        var scheduler = await schedulerFactory.GetScheduler();
+        var jobKey    = new JobKey(scheduleKey, jobDef.Group);
+
+        if (await scheduler.CheckExists(jobKey))
+            return false;
+
+        config ??= ScheduleConfigExtensions.FromAttribute(typeof(TScheduler));
+
+        var triggerKey = new TriggerKey(Constants.ParameterizedTriggerKey(scheduleKey), jobDef.Group);
+
+        var job = JobBuilder.Create<QuartzBackgroundJob>()
+            .WithIdentity(jobKey)
+            .ApplyConfig(config)
+            .UsingJobData(Constants.JobTypeNameKey, jobDef.Name)
+            .UsingJobData(Constants.JobGroupKey,    jobDef.Group)
+            .UsingJobData(Constants.JobParamsKey,   JsonSerializer.Serialize(param, SerializerOptions))
+            .StoreDurably(false)
+            .Build();
+
+        var trigger = TriggerBuilder.Create()
+            .WithIdentity(triggerKey)
+            .ForJob(jobKey)
+            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions))
+            .Build();
+
+        await scheduler.ScheduleJob(job, trigger);
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
 
     public IEnumerable<IScheduledJobDefinition> GetJobDefinitions() => jobsDiscovery.All;
 }
