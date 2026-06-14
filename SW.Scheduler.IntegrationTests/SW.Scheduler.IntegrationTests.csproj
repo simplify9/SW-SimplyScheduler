@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsTestProject>true</IsTestProject>
+    <!-- Increase default xUnit timeout for Docker container startup -->
+    <xunitRunnerOutputType>verbose</xunitRunnerOutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Test framework -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
+    <!-- Testcontainers — Docker-based database containers -->
+    <PackageReference Include="Testcontainers.PostgreSql" Version="3.10.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="3.10.0" />
+    <PackageReference Include="Testcontainers.MySql" Version="3.10.0" />
+
+    <!-- Hosting (IHost, IServiceScope) -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+
+    <!-- Direct DB drivers for schema setup/teardown DDL -->
+    <PackageReference Include="Npgsql" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.0" />
+    <!-- MySqlConnector comes transitively via SW.Scheduler.MySql → Pomelo -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SW.Scheduler.Sdk\SW.Scheduler.Sdk.csproj" />
+    <ProjectReference Include="..\SW.Scheduler\SW.Scheduler.csproj" />
+    <ProjectReference Include="..\SW.Scheduler.EfCore\SW.Scheduler.EfCore.csproj" />
+    <ProjectReference Include="..\SW.Scheduler.PgSql\SW.Scheduler.PgSql.csproj" />
+    <ProjectReference Include="..\SW.Scheduler.SqlServer\SW.Scheduler.SqlServer.csproj" />
+    <ProjectReference Include="..\SW.Scheduler.MySql\SW.Scheduler.MySql.csproj" />
+  </ItemGroup>
+
+</Project>
