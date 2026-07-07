@@ -67,4 +67,45 @@ public class PostgreSqlSchedulerTests : SchedulerTestBase, IClassFixture<Postgre
         return new HostHandle(host, cleanup: async () =>
             await _fixture.DropSchemaAsync(schema));
     }
+
+    protected override async Task<HostHandle> CreateClusteredHostAsync()
+    {
+        var schema = $"sch_{Guid.NewGuid():N}"[..16];
+
+        await _fixture.CreateSchemaAsync(schema);
+
+        var schemaOptions = new SchemaOptions(schema);
+        var connStr       = _fixture.ConnectionString;
+
+        var host = Host.CreateDefaultBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(schemaOptions);
+
+                services.AddDbContext<PgSqlTestDbContext>(opt =>
+                    opt.UseNpgsql(connStr)
+                       .ReplaceService<IModelCacheKeyFactory, SchemaAwareModelCacheKeyFactory>());
+
+                services.AddPgSqlScheduler(
+                    connectionString: connStr,
+                    schema:           schema,
+                    configure:        o => o.EnableClustering = true,
+                    assemblies:       typeof(PostgreSqlSchedulerTests).Assembly);
+
+                services.AddSchedulerMonitoring<PgSqlTestDbContext>();
+            })
+            .Build();
+
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<PgSqlTestDbContext>();
+            await db.Database.EnsureCreatedAsync();
+        }
+
+        await host.StartAsync();
+        await Task.Delay(400);
+
+        return new HostHandle(host, cleanup: async () =>
+            await _fixture.DropSchemaAsync(schema));
+    }
 }

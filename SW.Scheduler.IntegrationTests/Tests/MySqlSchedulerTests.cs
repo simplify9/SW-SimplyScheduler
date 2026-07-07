@@ -58,4 +58,40 @@ public class MySqlSchedulerTests : SchedulerTestBase, IClassFixture<MySqlFixture
         return new HostHandle(host, cleanup: async () =>
             await _fixture.DropDatabaseAsync(dbName));
     }
+
+    protected override async Task<HostHandle> CreateClusteredHostAsync()
+    {
+        var dbName = $"sched_{Guid.NewGuid():N}"[..20];
+
+        await _fixture.CreateDatabaseAsync(dbName);
+
+        var connStr = _fixture.ConnectionStringFor(dbName);
+
+        var host = Host.CreateDefaultBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddDbContext<MySqlTestDbContext>(opt =>
+                    opt.UseMySql(connStr, ServerVersion.AutoDetect(connStr)));
+
+                services.AddMySqlScheduler(
+                    connectionString: connStr,
+                    configure:        o => o.EnableClustering = true,
+                    assemblies:       typeof(MySqlSchedulerTests).Assembly);
+
+                services.AddSchedulerMonitoring<MySqlTestDbContext>();
+            })
+            .Build();
+
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MySqlTestDbContext>();
+            await db.Database.EnsureCreatedAsync();
+        }
+
+        await host.StartAsync();
+        await Task.Delay(400);
+
+        return new HostHandle(host, cleanup: async () =>
+            await _fixture.DropDatabaseAsync(dbName));
+    }
 }

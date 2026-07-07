@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Quartz;
 using SW.Scheduler.IntegrationTests.Infrastructure;
 using SW.Scheduler.IntegrationTests.Jobs;
 using Xunit;
@@ -50,6 +51,13 @@ public abstract class SchedulerTestBase
     /// the concrete provider. Called once per test method.
     /// </summary>
     protected abstract Task<HostHandle> CreateHostAsync();
+
+    /// <summary>
+    /// Build, seed, and start a fresh IHost configured with clustering enabled.
+    /// Used to verify the scheduler is assigned a unique instance identity rather
+    /// than Quartz's shared default ("NON_CLUSTERED").
+    /// </summary>
+    protected abstract Task<HostHandle> CreateClusteredHostAsync();
 
     // ─────────────────────────────────────────────────────────────────────────
     // 1. Simple job fires on a cron schedule
@@ -494,5 +502,21 @@ public abstract class SchedulerTestBase
         var paramDef = defs.Single(d => d.Name == nameof(ParamTestJob));
         Assert.True(paramDef.WithParams);
         Assert.Equal(typeof(JobParam), paramDef.JobParamsType);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 16. Clustering assigns a unique instance identity, not Quartz's shared
+    //     "NON_CLUSTERED" default (which breaks multi-node cluster coordination).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Clustering_AssignsUniqueInstanceId_NotSharedDefault()
+    {
+        await using var host = await CreateClusteredHostAsync();
+        using var scope = host.Services.CreateScope();
+        var schedulerFactory = scope.ServiceProvider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler();
+
+        Assert.NotEqual("NON_CLUSTERED", scheduler.SchedulerInstanceId);
     }
 }

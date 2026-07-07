@@ -64,4 +64,44 @@ public class SqlServerSchedulerTests : SchedulerTestBase, IClassFixture<SqlServe
         return new HostHandle(host, cleanup: async () =>
             await _fixture.DropSchemaAsync(schema));
     }
+
+    protected override async Task<HostHandle> CreateClusteredHostAsync()
+    {
+        var schema = $"sch_{Guid.NewGuid():N}"[..16];
+
+        await _fixture.CreateSchemaAsync(schema);
+
+        var schemaOptions = new SchemaOptions(schema);
+        var connStr       = _fixture.ConnectionString;
+
+        var host = Host.CreateDefaultBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(schemaOptions);
+
+                services.AddDbContext<SqlServerTestDbContext>(opt =>
+                    opt.UseSqlServer(connStr)
+                       .ReplaceService<IModelCacheKeyFactory, SchemaAwareModelCacheKeyFactory>());
+
+                services.AddSqlServerScheduler(
+                    connectionString: connStr,
+                    configure:        o => { o.Schema = schema; o.EnableClustering = true; },
+                    assemblies:       typeof(SqlServerSchedulerTests).Assembly);
+
+                services.AddSchedulerMonitoring<SqlServerTestDbContext>();
+            })
+            .Build();
+
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SqlServerTestDbContext>();
+            await db.Database.EnsureCreatedAsync();
+        }
+
+        await host.StartAsync();
+        await Task.Delay(400);
+
+        return new HostHandle(host, cleanup: async () =>
+            await _fixture.DropSchemaAsync(schema));
+    }
 }

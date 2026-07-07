@@ -46,6 +46,14 @@ public static class ServiceCollectionExtensions
 
         services.AddQuartz(q =>
         {
+            if (pgOptions.EnableClustering)
+            {
+                // Each clustered node must have a unique scheduler instance identity; the Quartz
+                // default ("NON_CLUSTERED") is shared by every process, which breaks cluster
+                // coordination (nodes recover each other's locks/triggers instead of their own).
+                q.SchedulerId = "AUTO";
+            }
+
             q.UsePersistentStore(s =>
             {
                 s.PerformSchemaValidation = true;
