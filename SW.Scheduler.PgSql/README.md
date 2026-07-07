@@ -108,12 +108,13 @@ builder.Services.AddPgSqlScheduler(
     configure: options =>
     {
         options.TablePrefix = "qrtz_";  // Default prefix
-        options.EnableClustering = true;  // Enable clustering
         options.ClusteringCheckinInterval = TimeSpan.FromSeconds(10);
         options.ClusteringMisfireThreshold = TimeSpan.FromSeconds(20);
     }
 );
 ```
+
+Clustering is always on (see below) — these two options just tune its check-in cadence.
 
 ### Configuration Action Style
 
@@ -122,7 +123,6 @@ builder.Services.AddPgSqlScheduler(options =>
 {
     options.ConnectionString = configuration.GetConnectionString("DefaultConnection")!;
     options.Schema = "quartz";
-    options.EnableClustering = true;
 });
 ```
 
@@ -225,13 +225,16 @@ builder.Services.AddPgSqlScheduler(
 
 ### Scenario 4: Clustering (Multiple Instances)
 
+Clustering is always on — no flag needed. Each instance gets a unique, auto-generated scheduler
+ID, so running multiple instances against the same database coordinates safely out of the box. The
+check-in cadence is tunable if you need it:
+
 ```csharp
 builder.Services.AddPgSqlScheduler(
     connectionString: connectionString,
     schema: "quartz",
     configure: options =>
     {
-        options.EnableClustering = true;
         options.ClusteringCheckinInterval = TimeSpan.FromSeconds(10);
     }
 );

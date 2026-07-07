@@ -52,13 +52,6 @@ public abstract class SchedulerTestBase
     /// </summary>
     protected abstract Task<HostHandle> CreateHostAsync();
 
-    /// <summary>
-    /// Build, seed, and start a fresh IHost configured with clustering enabled.
-    /// Used to verify the scheduler is assigned a unique instance identity rather
-    /// than Quartz's shared default ("NON_CLUSTERED").
-    /// </summary>
-    protected abstract Task<HostHandle> CreateClusteredHostAsync();
-
     // ─────────────────────────────────────────────────────────────────────────
     // 1. Simple job fires on a cron schedule
     // ─────────────────────────────────────────────────────────────────────────
@@ -505,14 +498,15 @@ public abstract class SchedulerTestBase
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 16. Clustering assigns a unique instance identity, not Quartz's shared
-    //     "NON_CLUSTERED" default (which breaks multi-node cluster coordination).
+    // 16. Clustering is always on: the scheduler gets a unique instance identity,
+    //     not Quartz's shared "NON_CLUSTERED" default (which breaks multi-node
+    //     cluster coordination).
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Clustering_AssignsUniqueInstanceId_NotSharedDefault()
     {
-        await using var host = await CreateClusteredHostAsync();
+        await using var host = await CreateHostAsync();
         using var scope = host.Services.CreateScope();
         var schedulerFactory = scope.ServiceProvider.GetRequiredService<ISchedulerFactory>();
         var scheduler = await schedulerFactory.GetScheduler();

@@ -183,12 +183,14 @@ builder.Services.AddPgSqlScheduler(
     schema: "quartz",
     configure: options =>
     {
-        options.EnableClustering = true;
         options.ClusteringCheckinInterval = TimeSpan.FromSeconds(10);
         options.ClusteringMisfireThreshold = TimeSpan.FromSeconds(20);
     }
 );
 ```
+
+Clustering is always on — there's no flag to disable it. These two options just tune its check-in
+cadence and misfire threshold.
 
 ### Custom Table Prefix
 

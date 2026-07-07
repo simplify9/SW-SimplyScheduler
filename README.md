@@ -471,16 +471,18 @@ The included `SampleApplication` shows all three providers wired together. Selec
 }
 ```
 
+All three persistent providers below always run in clustered mode — this is what makes lock/trigger
+acquisition safe across multiple processes, and it recovers orphaned locks/triggers after an unclean
+shutdown even with a single instance running. Each process gets a unique, auto-generated scheduler
+instance ID (`SchedulerId = "AUTO"`); there's no flag to turn clustering off.
+
 ### PostgreSQL — `SW.Scheduler.PgSql`
 
 ```csharp
 // Program.cs
 services.AddPgSqlScheduler(
     connectionString: "Host=...;Database=...;",
-    schema: "quartz",                   // required
-    configure: o => {
-        o.EnableClustering = true;      // optional
-    }
+    schema: "quartz"                    // required
 );
 
 // AppDbContext.OnModelCreating
