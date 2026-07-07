@@ -43,6 +43,14 @@ public static class ServiceCollectionExtensions
 
         services.AddQuartz(q =>
         {
+            // Clustering is always on for persistent stores: it's the only way locks/triggers
+            // are acquired safely across processes, and it enables recovery of orphaned
+            // locks/triggers after an unclean shutdown even with a single instance running.
+            // Each clustered node must have a unique scheduler instance identity; the Quartz
+            // default ("NON_CLUSTERED") is shared by every process, which breaks cluster
+            // coordination (nodes recover each other's locks/triggers instead of their own).
+            q.SchedulerId = "AUTO";
+
             q.UsePersistentStore(s =>
             {
                 s.PerformSchemaValidation = true;
@@ -59,14 +67,11 @@ public static class ServiceCollectionExtensions
 
                 s.UseSystemTextJsonSerializer();
 
-                if (sqlOptions.EnableClustering)
+                s.UseClustering(c =>
                 {
-                    s.UseClustering(c =>
-                    {
-                        c.CheckinMisfireThreshold = sqlOptions.ClusteringMisfireThreshold;
-                        c.CheckinInterval = sqlOptions.ClusteringCheckinInterval;
-                    });
-                }
+                    c.CheckinMisfireThreshold = sqlOptions.ClusteringMisfireThreshold;
+                    c.CheckinInterval = sqlOptions.ClusteringCheckinInterval;
+                });
             });
         });
 

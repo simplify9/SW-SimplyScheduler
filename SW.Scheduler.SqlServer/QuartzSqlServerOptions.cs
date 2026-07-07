@@ -16,9 +16,6 @@ public class QuartzSqlServerOptions
     /// <summary>Table prefix for Quartz tables (default: "QRTZ_").</summary>
     public string TablePrefix { get; set; } = "QRTZ_";
 
-    /// <summary>Enable clustering for multiple scheduler instances (default: false).</summary>
-    public bool EnableClustering { get; set; } = false;
-
     /// <summary>Clustering check-in interval (default: 10 seconds).</summary>
     public TimeSpan ClusteringCheckinInterval { get; set; } = TimeSpan.FromSeconds(10);
 

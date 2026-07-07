@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Quartz;
 using SW.Scheduler.IntegrationTests.Infrastructure;
 using SW.Scheduler.IntegrationTests.Jobs;
 using Xunit;
@@ -494,5 +495,22 @@ public abstract class SchedulerTestBase
         var paramDef = defs.Single(d => d.Name == nameof(ParamTestJob));
         Assert.True(paramDef.WithParams);
         Assert.Equal(typeof(JobParam), paramDef.JobParamsType);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 16. Clustering is always on: the scheduler gets a unique instance identity,
+    //     not Quartz's shared "NON_CLUSTERED" default (which breaks multi-node
+    //     cluster coordination).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Clustering_AssignsUniqueInstanceId_NotSharedDefault()
+    {
+        await using var host = await CreateHostAsync();
+        using var scope = host.Services.CreateScope();
+        var schedulerFactory = scope.ServiceProvider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler();
+
+        Assert.NotEqual("NON_CLUSTERED", scheduler.SchedulerInstanceId);
     }
 }
