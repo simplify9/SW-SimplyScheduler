@@ -62,7 +62,23 @@ public static class ServiceCollectionExtensions
                 s.UsePostgres(pg =>
                 {
                     pg.UseDriverDelegate<PostgreSQLDelegate>();
-                    pg.ConnectionString = pgOptions.ConnectionString;
+                    if (pgOptions.UseAzureManagedIdentity)
+                    {
+                        // Custom IDbProvider path: Quartz instantiates the type with its
+                        // parameterless constructor and populates properties from the
+                        // "connectionProvider.*" group below, ignoring pg.ConnectionString.
+                        pg.UseConnectionProvider<AzureManagedIdentityNpgsqlDbProvider>();
+                        var dataSourceName = SchedulerBuilder.AdoProviderOptions.DefaultDataSourceName;
+                        s.SetProperty($"quartz.dataSource.{dataSourceName}.connectionProvider.connectionString", pgOptions.ConnectionString);
+                        if (!string.IsNullOrEmpty(pgOptions.AzureManagedIdentityClientId))
+                        {
+                            s.SetProperty($"quartz.dataSource.{dataSourceName}.connectionProvider.managedIdentityClientId", pgOptions.AzureManagedIdentityClientId);
+                        }
+                    }
+                    else
+                    {
+                        pg.ConnectionString = pgOptions.ConnectionString;
+                    }
                     pg.TablePrefix = $"{pgOptions.Schema}.{pgOptions.TablePrefix}";
                 });
                 s.UseSystemTextJsonSerializer();

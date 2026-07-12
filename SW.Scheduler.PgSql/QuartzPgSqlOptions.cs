@@ -31,6 +31,23 @@ public class QuartzPgSqlOptions
     public TimeSpan ClusteringMisfireThreshold { get; set; } = TimeSpan.FromSeconds(20);
 
     /// <summary>
+    /// Authenticate with Azure AD (Managed Identity / Entra ID) instead of a static password —
+    /// for Postgres servers such as Azure Database for PostgreSQL that require token auth.
+    /// <see cref="ConnectionString"/> must not contain a Password; a fresh token is fetched and
+    /// used as the password for every new physical connection Quartz opens, since Quartz's ADO
+    /// job store keeps connections for the lifetime of the process with no hook to refresh a
+    /// static credential.
+    /// </summary>
+    public bool UseAzureManagedIdentity { get; set; }
+
+    /// <summary>
+    /// Client ID of the user-assigned managed identity to authenticate as. Leave null to use
+    /// <c>DefaultAzureCredential</c>'s standard fallback chain (system-assigned identity,
+    /// environment variables, etc). Only used when <see cref="UseAzureManagedIdentity"/> is true.
+    /// </summary>
+    public string? AzureManagedIdentityClientId { get; set; }
+
+    /// <summary>
     /// Validate the options
     /// </summary>
     internal void Validate()
