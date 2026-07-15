@@ -28,7 +28,7 @@
     <PackageReference Include="Testcontainers.MySql" Version="3.10.0" />
 
     <!-- Hosting (IHost, IServiceScope) -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
 
     <!-- Direct DB drivers for schema setup/teardown DDL -->
     <PackageReference Include="Npgsql" Version="8.0.0" />
