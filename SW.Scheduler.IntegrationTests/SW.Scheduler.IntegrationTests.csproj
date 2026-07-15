@@ -32,7 +32,7 @@
 
     <!-- Direct DB drivers for schema setup/teardown DDL -->
     <PackageReference Include="Npgsql" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <!-- MySqlConnector comes transitively via SW.Scheduler.MySql → Pomelo -->
   </ItemGroup>
 
