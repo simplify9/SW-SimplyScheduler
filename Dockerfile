@@ -3,7 +3,7 @@ WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 
-FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY ["SW.Scheduler.Web/SW.Scheduler.Web.csproj", "SW.Scheduler.Web/"]
 COPY ["SW.Scheduler.Sdk/SW.Scheduler.Sdk.csproj", "SW.Scheduler.Sdk/"]
