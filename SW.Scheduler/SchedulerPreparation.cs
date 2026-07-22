@@ -96,7 +96,7 @@ public class SchedulerPreparation(IServiceProvider serviceProvider, ILogger<Sche
             .WithIdentity(triggerKey)
             .ForJob(jobKey)
             .WithCronSchedule(scheduleAttr.CronExpression,
-                b => b.ApplyMisfire(config.MisfireInstructions))
+                b => b.ApplyMisfire(config.MisfireInstructions).InTimeZone(TimeZoneInfo.Utc))
             .WithDescription(scheduleAttr.Description)
             .Build();
 
@@ -145,7 +145,7 @@ public class SchedulerPreparation(IServiceProvider serviceProvider, ILogger<Sche
             .WithIdentity(triggerKey)
             .ForJob(jobKey)
             .WithCronSchedule(options.CleanupCronExpression,
-                b => b.WithMisfireHandlingInstructionDoNothing())
+                b => b.WithMisfireHandlingInstructionDoNothing().InTimeZone(TimeZoneInfo.Utc))
             .WithDescription($"Deletes JobExecution records older than {options.RetentionDays} days.")
             .Build();
 

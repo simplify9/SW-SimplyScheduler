@@ -106,7 +106,7 @@ internal sealed class QuartzSchedulerViewerCommand(ISchedulerFactory schedulerFa
         var newTrigger = TriggerBuilder.Create()
             .WithIdentity(existing.Key)
             .ForJob(jobKey)
-            .WithCronSchedule(newCronExpression)
+            .WithCronSchedule(newCronExpression, b => b.InTimeZone(TimeZoneInfo.Utc))
             .Build();
 
         await scheduler.RescheduleJob(existing.Key, newTrigger, ct);
