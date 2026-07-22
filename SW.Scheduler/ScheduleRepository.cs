@@ -91,7 +91,7 @@ internal static class ScheduleConfigExtensions
         => TriggerBuilder.Create()
             .WithIdentity(existing.Key)
             .ForJob(existing.JobKey)
-            .WithCronSchedule(newCronExpression, b => b.ApplyMisfire(misfire))
+            .WithCronSchedule(newCronExpression, b => b.ApplyMisfire(misfire).InTimeZone(TimeZoneInfo.Utc))
             .UsingJobData(existing.JobDataMap)
             .Build();
 }
@@ -166,7 +166,7 @@ internal class ScheduleRepository(ISchedulerFactory schedulerFactory, JobsDiscov
         var trigger = TriggerBuilder.Create()
             .WithIdentity(triggerKey)
             .ForJob(jobKey)
-            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions))
+            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions).InTimeZone(TimeZoneInfo.Utc))
             .Build();
 
         await scheduler.ScheduleJob(job, trigger);
@@ -192,7 +192,7 @@ internal class ScheduleRepository(ISchedulerFactory schedulerFactory, JobsDiscov
         var newTrigger = TriggerBuilder.Create()
             .WithIdentity(triggerKeyObj)
             .ForJob(jobKey)
-            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions))
+            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions).InTimeZone(TimeZoneInfo.Utc))
             .Build();
 
         // If the config (concurrency / recovery) has changed, update the stored durable job too.
@@ -417,7 +417,7 @@ internal class ScheduleRepository(ISchedulerFactory schedulerFactory, JobsDiscov
         var trigger = TriggerBuilder.Create()
             .WithIdentity(triggerKey)
             .ForJob(jobKey)
-            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions))
+            .WithCronSchedule(cronExpression, b => b.ApplyMisfire(config.MisfireInstructions).InTimeZone(TimeZoneInfo.Utc))
             .Build();
 
         await scheduler.ScheduleJob(job, trigger);
