@@ -1,6 +1,6 @@
 # SW.Scheduler
 
-A type-safe, developer-friendly wrapper around [Quartz.NET](https://www.quartz-scheduler.net/) for .NET 8+ that makes job scheduling intuitive — declaratively via attributes or dynamically at runtime.
+A type-safe, developer-friendly wrapper around [Quartz.NET](https://www.quartz-scheduler.net/) for .NET 10+ that makes job scheduling intuitive — declaratively via attributes or dynamically at runtime.
 
 ---
 

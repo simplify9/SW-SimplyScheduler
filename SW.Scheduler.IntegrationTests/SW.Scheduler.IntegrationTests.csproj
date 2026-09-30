@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsTestProject>true</IsTestProject>
@@ -28,10 +28,10 @@
     <PackageReference Include="Testcontainers.MySql" Version="3.10.0" />
 
     <!-- Hosting (IHost, IServiceScope) -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
 
     <!-- Direct DB drivers for schema setup/teardown DDL -->
-    <PackageReference Include="Npgsql" Version="8.0.0" />
+    <PackageReference Include="Npgsql" Version="9.0.5" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.0" />
     <!-- MySqlConnector comes transitively via SW.Scheduler.MySql → Pomelo -->
   </ItemGroup>
