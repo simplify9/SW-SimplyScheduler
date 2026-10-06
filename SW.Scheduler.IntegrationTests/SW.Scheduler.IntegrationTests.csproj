@@ -31,8 +31,8 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
 
     <!-- Direct DB drivers for schema setup/teardown DDL -->
-    <PackageReference Include="Npgsql" Version="9.0.5" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.0" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.6" />
     <!-- MySqlConnector comes transitively via SW.Scheduler.MySql → Pomelo -->
   </ItemGroup>
 
