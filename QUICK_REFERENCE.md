@@ -1,198 +1,145 @@
 # SW.Scheduler - Quick Reference
 
-## 📋 At a Glance
+A cheat sheet for the current API. Setup, providers, the admin UI and monitoring are in [README.md](README.md);
+the full guide is [SCHEDULER_GUIDE.md](SCHEDULER_GUIDE.md).
 
-| Feature | `IScheduledJob` | `IScheduledJob<TParam>` |
-|---------|----------------|------------------------|
-| **Declarative Scheduling** | ✅ Use `[Schedule]` | ❌ Not supported |
-| **Runtime Scheduling** | ✅ Supported | ✅ Supported |
-| **Parameters** | ❌ No params | ✅ Per-schedule params |
+## At a glance
 
----
+| | `IScheduledJob` | `IScheduledJob<TParam>` |
+|---|---|---|
+| Scheduled at startup with `[Schedule]` | ✅ | ❌ |
+| Scheduled at runtime (`IScheduleRepository`) | ✅ one schedule per job | ✅ one schedule per `scheduleKey` |
+| Parameters | ❌ | ✅ JSON-serializable `TParam` |
+| Run once | ❌ | ✅ `ScheduleOnce` |
 
-## 🚀 Quick Start
+## Define a job
 
-### 1. Define a Job
-
-**Simple Job:**
 ```csharp
-[Schedule("0 * * * * ?", TriggerKey = "my-job")]
-public class MyJob : IScheduledJob
+[Schedule("0 0 2 * * ?", Description = "Nightly cleanup, 02:00 UTC")]
+[RetryConfig(MaxRetries = 3, RetryAfterMinutes = 5)]                       // optional
+[ScheduleConfig(MisfireInstructions = MisfireInstructions.Skip)]           // optional
+public class CleanupJob(AppDbContext db) : IScheduledJob
 {
-    public Task Execute()
-    {
-        // Your logic here
-        return Task.CompletedTask;
-    }
+    public Task Execute() => db.Database.ExecuteSqlRawAsync("...");
+}
+
+public record ReportParams(int CustomerId, string Format);
+
+public class ReportJob : IScheduledJob<ReportParams>
+{
+    public Task Execute(ReportParams p) => Task.CompletedTask;
 }
 ```
 
-**Parameterized Job:**
+Job classes must be **public**: the assembly scan skips others. Dependencies are injected per run.
+
+## Register (host project)
+
 ```csharp
-public class MyParamJob : IScheduledJob<MyParams>
+// PostgreSQL. SQL Server: AddSqlServerScheduler. MySQL: AddMySqlScheduler. In-memory: AddScheduler.
+builder.Services.AddPgSqlScheduler(connectionString, schema: "quartz",
+    configureOptions: o => o.RetentionDays = 30,
+    assemblies: typeof(CleanupJob).Assembly);
+builder.Services.AddSchedulerMonitoring<AppDbContext>();
+
+// AppDbContext.OnModelCreating, then add a migration
+modelBuilder.UseSchedulerPostgreSql("quartz");
+```
+
+## Runtime API (`IScheduleRepository`)
+
+### Simple jobs
+
+```csharp
+await scheduler.Schedule<CleanupJob>("0 0 3 * * ?");          // create or replace the trigger
+await scheduler.RescheduleJob<CleanupJob>("0 0 4 * * ?");
+await scheduler.PauseJob<CleanupJob>();
+await scheduler.ResumeJob<CleanupJob>();
+await scheduler.UnscheduleJob<CleanupJob>();                    // the job stays registered
+```
+
+### Parameterized jobs
+
+```csharp
+await scheduler.Schedule<ReportJob, ReportParams>(new(42, "pdf"), "0 0 9 * * ?", scheduleKey: "report-42");
+
+bool created = await scheduler.ScheduleIfNotExists<ReportJob, ReportParams>(   // safe on every start, every node
+    new(42, "pdf"), "0 0 9 * * ?", scheduleKey: "report-42");
+
+string key = await scheduler.ScheduleOnce<ReportJob, ReportParams>(new(42, "pdf"));                  // now
+await scheduler.ScheduleOnce<ReportJob, ReportParams>(new(42, "pdf"), runAt: DateTime.UtcNow.AddHours(1));
+
+await scheduler.RescheduleJob<ReportJob, ReportParams>("report-42", "0 0 10 * * ?");
+await scheduler.PauseJob<ReportJob, ReportParams>("report-42");
+await scheduler.ResumeJob<ReportJob, ReportParams>("report-42");
+await scheduler.UnscheduleJob<ReportJob, ReportParams>("report-42");
+```
+
+### Per-schedule config
+
+```csharp
+await scheduler.Schedule<CleanupJob>("0 0 3 * * ?", new ScheduleConfig
 {
-    public Task Execute(MyParams jobParams)
-    {
-        // Your logic with params
-        return Task.CompletedTask;
-    }
-}
+    AllowConcurrentExecution = false,                   // default
+    RequestsRecovery         = true,                    // default: re-run if the node dies mid-run
+    MisfireInstructions      = MisfireInstructions.Skip,
+    EnableRetry = true, MaxRetries = 5, RetryAfterMinutes = 10
+});
 ```
 
-### 2. Schedule at Runtime
+### List job types
 
 ```csharp
-// Inject IScheduleRepository
-private readonly IScheduleRepository _scheduler;
-
-// Schedule simple job
-await _scheduler.Schedule<MyJob>("0 0 9 * * ?");
-
-// Schedule with params
-await _scheduler.Schedule<MyParamJob, MyParams>(
-    new MyParams { Value = "test" },
-    "0 0 9 * * ?"
-);
+IEnumerable<IScheduledJobDefinition> defs = scheduler.GetJobDefinitions();
 ```
 
----
-
-## 🎯 Common Use Cases
-
-### ✅ Fixed Schedule (Declarative)
-```csharp
-[Schedule("0 0 2 * * ?", Description = "Daily backup at 2 AM")]
-public class BackupJob : IScheduledJob { }
-```
-
-### ✅ User-Defined Schedule (Runtime)
-```csharp
-[HttpPost("schedule")]
-public async Task<string> Schedule(string cron)
-{
-    return await _scheduler.Schedule<ReportJob>(cron);
-}
-```
-
-### ✅ Different Params, Same Job
-```csharp
-// VIP customers at 9 AM
-await _scheduler.Schedule<EmailJob, EmailParams>(
-    new EmailParams { Group = "VIP" },
-    "0 0 9 * * ?",
-    "vip-emails"
-);
-
-// Regular customers at 10 AM
-await _scheduler.Schedule<EmailJob, EmailParams>(
-    new EmailParams { Group = "Regular" },
-    "0 0 10 * * ?",
-    "regular-emails"
-);
-```
-
-### ✅ Run Once
-```csharp
-// Run in 5 minutes
-await _scheduler.ScheduleOnce<MyJob>(
-    DateTime.UtcNow.AddMinutes(5)
-);
-```
-
-### ✅ Trigger Immediately
-```csharp
-// Execute now (doesn't create schedule)
-await _scheduler.TriggerJobNow<MyJob>();
-```
-
----
-
-## 🎛️ Management Operations
+## Execution history (`IScheduleReader`, needs `AddSchedulerMonitoring`)
 
 ```csharp
-// Reschedule
-await _scheduler.RescheduleJob("my-trigger", "0 0 12 * * ?");
-
-// Pause
-await _scheduler.PauseJob("my-trigger");
-
-// Resume
-await _scheduler.ResumeJob("my-trigger");
-
-// Remove
-await _scheduler.UnscheduleJob("my-trigger");
-
-// List all jobs
-var jobs = _scheduler.GetJobDefinitions();
+await reader.GetLastExecution<CleanupJob>();
+await reader.GetRecentExecutions<CleanupJob>(limit: 10);
+await reader.GetFailedExecutions<CleanupJob>(since: DateTime.UtcNow.AddDays(-7));
+await reader.GetLastExecution<ReportJob, ReportParams>("report-42");
+await reader.GetRunningExecutions();                    // across all nodes
 ```
 
----
+## Cron (6 fields, always UTC)
 
-## 📅 Cron Cheat Sheet
+`second minute hour dayOfMonth month dayOfWeek`
 
 | Expression | Meaning |
-|------------|---------|
+|---|---|
 | `0 * * * * ?` | Every minute |
-| `0 0 * * * ?` | Every hour |
-| `0 0 9 * * ?` | Daily at 9 AM |
-| `0 0 9 * * MON-FRI` | Weekdays at 9 AM |
 | `0 */15 * * * ?` | Every 15 minutes |
-| `0 0 2 * * ?` | Daily at 2 AM |
-| `0 0 0 1 * ?` | First of month |
-| `0 0 0 ? * SUN` | Sundays at midnight |
+| `0 0 * * * ?` | Every hour |
+| `0 0 9 * * ?` | Daily at 09:00 UTC |
+| `0 0 9 * * MON-FRI` | Weekdays at 09:00 UTC |
+| `0 0 0 1 * ?` | First of the month, midnight UTC |
+| `0 0 0 ? * SUN` | Sundays, midnight UTC |
 
-**Format:** `second minute hour dayOfMonth month dayOfWeek`
+Triggers are built in UTC. For 09:00 at UTC+3, write `0 0 6 * * ?`.
 
----
+## Things that surprise people
 
-## ⚠️ Important Notes
+- **`[Schedule]` is applied again on every startup.** A cron set at runtime with `Schedule<TJob>` or
+  `RescheduleJob<TJob>`, and a pause, last only until the next restart. For a schedule that must be
+  changeable at runtime, leave `[Schedule]` off and schedule it from code.
+- **A job's identity is its namespace (last two segments) + class name.** Renaming or moving the class makes it a
+  new job; the old trigger removes itself the next time it fires.
+- **There is no "run now" for a simple job.** Call the job's logic directly, or use a parameterized job and
+  `ScheduleOnce`.
+- **Runs don't overlap by default**, across all nodes. Set `AllowConcurrentExecution = true` to allow it.
+- **A run on a node that dies is run again** on another node (`RequestsRecovery`, on by default). Jobs should be
+  safe to run twice.
+- `Execute()` takes no cancellation token. Shutdown waits for running jobs until the host stops waiting.
 
-1. **Trigger Keys**: Must be unique. Use descriptive names.
-2. **Parameters**: Must be JSON-serializable (simple types, POCOs).
-3. **Concurrency**: Jobs don't run concurrently by default.
-4. **Persistence**: Schedules survive app restarts if using DB persistence.
-5. **Attribute Limitation**: `[Schedule]` only works on `IScheduledJob` (not `IScheduledJob<T>`).
+## Troubleshooting
 
----
-
-## 🔧 Setup
-
-```csharp
-// Program.cs
-builder.Services.AddScheduler(typeof(Program).Assembly);
-```
-
----
-
-## 💡 Tips
-
-- Use `[Schedule]` for **fixed** schedules that don't change
-- Use runtime API for **dynamic** schedules controlled by users
-- Override declarative schedules by unscheduling + rescheduling
-- Use meaningful trigger keys for management
-- Test cron expressions at https://crontab.guru (adjust for Quartz format)
-
----
-
-## 🆘 Troubleshooting
-
-**Job not running?**
-- Check cron expression is valid
-- Verify job is registered: `GetJobDefinitions()`
-- Check logs for errors
-
-**Trigger already exists?**
-- Use unique trigger keys
-- Or unschedule first
-- Or use `RescheduleJob`
-
-**Params not working?**
-- Ensure type is serializable
-- Check param is not null
-- Verify generic type matches
-
----
-
-## 📚 Full Documentation
-
-See [SCHEDULER_GUIDE.md](SCHEDULER_GUIDE.md) for complete documentation.
+| Symptom | Check |
+|---|---|
+| Job never runs | the class is public and in a scanned assembly; `GetJobDefinitions()` lists it; it has `[Schedule]` or was scheduled at runtime |
+| Startup fails with a schema validation error | the migration with `UseScheduler…()` hasn't been applied; schema in `AddPgSqlScheduler` and `UseSchedulerPostgreSql` must match |
+| "A trigger with key … already exists" | use `RescheduleJob`, or `ScheduleIfNotExists` for parameterized jobs |
+| Runs an hour or more off | cron is UTC |
+| A runtime cron change was lost | the job has `[Schedule]`, which is re-applied on startup |
+| Params arrive empty or fail | `TParam` must round-trip through System.Text.Json |
