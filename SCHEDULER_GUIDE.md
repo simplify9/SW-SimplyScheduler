@@ -119,15 +119,10 @@ await scheduler.Schedule<DailyReportJob>("0 0 8 * * ?", new ScheduleConfig
 });
 ```
 
-### Simple job — ScheduleOnce
+### Simple job — run once
 
-```csharp
-// Run immediately
-await scheduler.ScheduleOnce<DailyReportJob>();
-
-// Run at a specific UTC time
-await scheduler.ScheduleOnce<DailyReportJob>(runAt: DateTime.UtcNow.AddHours(1));
-```
+There is no `ScheduleOnce` for simple jobs. To run one on demand, call its logic directly, or make it a
+parameterized job and use `ScheduleOnce<TJob, TParam>` (below).
 
 ### Parameterized job — Schedule
 
